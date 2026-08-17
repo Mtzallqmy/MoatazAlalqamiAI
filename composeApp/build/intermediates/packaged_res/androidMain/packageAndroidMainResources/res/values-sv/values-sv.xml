@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="daemon_channel_description">Håller Moataz Alalqami AI igång för att utföra schemalagda uppgifter</string>
+    <string name="daemon_channel_name">Moataz Alalqami AI bakgrundstjänst</string>
+    <string name="daemon_notification_text">Bakgrundstjänsten körs</string>
+    <string name="download_channel_description">Visar förlopp vid nedladdning av AI-modeller</string>
+    <string name="download_channel_name">Modellnedladdningar</string>
+    <string name="download_notification_text">Laddar ner modell…</string>
+</resources>

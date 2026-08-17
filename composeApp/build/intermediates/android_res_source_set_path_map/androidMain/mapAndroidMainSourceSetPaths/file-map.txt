@@ -1,0 +1,5 @@
+com.inspiredandroid.kai.shared.composeApp-androidMain-0 /home/ubuntu/kai_repo/composeApp/build/generated/updated_navigation_xml/androidMain/res
+com.inspiredandroid.kai.shared.composeApp-packageAndroidMainResources-1 /home/ubuntu/kai_repo/composeApp/build/intermediates/incremental/androidMain/packageAndroidMainResources/merged.dir
+com.inspiredandroid.kai.shared.composeApp-packageAndroidMainResources-2 /home/ubuntu/kai_repo/composeApp/build/intermediates/incremental/androidMain/packageAndroidMainResources/stripped.dir
+com.inspiredandroid.kai.shared.composeApp-packageAndroidMainResources-3 /home/ubuntu/kai_repo/composeApp/build/intermediates/packaged_res/androidMain/packageAndroidMainResources/res
+gradleHome-0 /home/ubuntu/.gradle

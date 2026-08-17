@@ -1,0 +1,10 @@
+com.inspiredandroid.kai.androidApp-foss-0 /home/ubuntu/kai_repo/androidApp/build/generated/res/pngs/foss/debug
+com.inspiredandroid.kai.androidApp-updated_navigation_xml-1 /home/ubuntu/kai_repo/androidApp/build/generated/updated_navigation_xml/fossDebug
+com.inspiredandroid.kai.androidApp-packageFossDebugResources-2 /home/ubuntu/kai_repo/androidApp/build/intermediates/incremental/fossDebug/packageFossDebugResources/merged.dir
+com.inspiredandroid.kai.androidApp-packageFossDebugResources-3 /home/ubuntu/kai_repo/androidApp/build/intermediates/incremental/fossDebug/packageFossDebugResources/stripped.dir
+com.inspiredandroid.kai.androidApp-fossDebug-4 /home/ubuntu/kai_repo/androidApp/build/intermediates/merged_res/fossDebug/mergeFossDebugResources
+com.inspiredandroid.kai.androidApp-debug-5 /home/ubuntu/kai_repo/androidApp/src/debug/res
+com.inspiredandroid.kai.androidApp-foss-6 /home/ubuntu/kai_repo/androidApp/src/foss/res
+com.inspiredandroid.kai.androidApp-fossDebug-7 /home/ubuntu/kai_repo/androidApp/src/fossDebug/res
+com.inspiredandroid.kai.androidApp-main-8 /home/ubuntu/kai_repo/androidApp/src/main/res
+gradleHome-0 /home/ubuntu/.gradle

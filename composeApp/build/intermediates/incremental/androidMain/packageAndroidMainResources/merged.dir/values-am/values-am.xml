@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="daemon_channel_description">የተያዙ ተግባራት አፈጻጸም እንዲኖር Moataz Alalqami AIን በስተጀርባ ያሮጣል</string>
+    <string name="daemon_channel_name">Moataz Alalqami AI ዳይሞን አገልግሎት</string>
+    <string name="daemon_notification_text">ዳይሞን በሥራ ላይ ነው</string>
+    <string name="download_channel_description">የAI ሞዴሎችን በማውረድ ሂደት እድገትን ያሳያል</string>
+    <string name="download_channel_name">የሞዴል ውርዶች</string>
+    <string name="download_notification_text">ሞዴል በማውረድ ላይ…</string>
+</resources>

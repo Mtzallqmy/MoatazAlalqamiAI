@@ -1,7 +1,4 @@
-import org.jetbrains.compose.desktop.application.dsl.TargetFormat
-import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpackConfig
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -16,9 +13,6 @@ sqldelight {
     databases {
         create("KaiDatabase") {
             packageName.set("com.inspiredandroid.kai.db")
-            // The schema lives on user devices — structural changes need a
-            // numbered .sqm migration file (see conversation.sq header).
-            // This makes the build verify that migrations reproduce the schema.
             verifyMigrations.set(true)
         }
     }
@@ -46,44 +40,6 @@ kotlin {
             enable = true
         }
         withHostTest {}
-    }
-
-    listOf(
-        iosArm64(),
-        iosSimulatorArm64(),
-    ).forEach { iosTarget ->
-        iosTarget.binaries.framework {
-            baseName = "ComposeApp"
-            // Dynamic so LiteRT-LM's `-Xlinker -all_load` (in its Package.swift) doesn't
-            // sweep up ComposeApp's static archive too and trip thousands of duplicate
-            // symbols at link time. Each framework gets its own link context.
-            isStatic = false
-            // Must differ from the iosApp bundle identifier — iOS refuses to install a
-            // .app whose embedded framework shares its parent's identifier (MIInstaller
-            // error 57 / DuplicateIdentifier).
-            binaryOption("bundleId", "com.inspiredandroid.kai.composeapp")
-        }
-    }
-
-    jvm("desktop")
-
-    @OptIn(ExperimentalWasmDsl::class)
-    wasmJs {
-        outputModuleName = "composeApp"
-        browser {
-            val rootDirPath = project.rootDir.path
-            val projectDirPath = project.projectDir.path
-            commonWebpackConfig {
-                outputFileName = "composeApp.js"
-                devServer =
-                    (devServer ?: KotlinWebpackConfig.DevServer()).apply {
-                        // Serve sources to debug inside browser
-                        static(rootDirPath)
-                        static(projectDirPath)
-                    }
-            }
-        }
-        binaries.executable()
     }
 
     sourceSets {
@@ -158,60 +114,6 @@ kotlin {
                 implementation(libs.xz)
             }
         }
-        getByName("desktopMain") {
-            kotlin.srcDir("src/jvmShared/kotlin")
-            dependencies {
-                implementation(compose.desktop.currentOs)
-                implementation(libs.kotlinx.coroutines.swing)
-                implementation(libs.ktor.client.cio)
-                implementation(libs.bouncycastle.provider)
-                implementation(libs.slf4j.nop)
-                implementation(libs.litert.lm.jvm)
-                implementation(libs.sqldelight.sqlite.driver)
-            }
-        }
-        iosMain.dependencies {
-            implementation(libs.ktor.client.darwin)
-            implementation(libs.ktor.network)
-            implementation(libs.ktor.network.tls)
-            implementation(libs.sqldelight.native.driver)
-        }
-        wasmJsMain.dependencies {
-            implementation(libs.ktor.client.js)
-        }
-    }
-}
-
-compose.desktop {
-    application {
-        mainClass = "com.inspiredandroid.kai.MainKt"
-
-        buildTypes.release.proguard {
-            configurationFiles.from(
-                project.file("proguard-rules.pro"),
-                project.file("proguard-desktop.pro"),
-            )
-        }
-
-        nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.AppImage)
-            packageName = "Kai"
-            packageVersion = libs.versions.appVersion.get()
-
-            macOS {
-                iconFile.set(project.file("icon.icns"))
-            }
-            windows {
-                iconFile.set(project.file("icon.ico"))
-                menuGroup = "Kai"
-            }
-            linux {
-                iconFile.set(project.file("icon.png"))
-                // Applies to the shared jlink runtime image for every platform, not just Linux —
-                // java.sql is required since the SQLDelight/SQLite migration (9d6ceec9).
-                modules("jdk.security.auth", "java.sql")
-            }
-        }
     }
 }
 
@@ -228,7 +130,7 @@ afterEvaluate {
                     .asFile
             val processedJar = proguardDir.listFiles()?.find { it.name.startsWith("bcprov") } ?: return@doLast
             val originalJar =
-                configurations["desktopRuntimeClasspath"]
+                configurations["runtimeClasspath"]
                     .resolve()
                     .find { it.name.startsWith("bcprov") } ?: return@doLast
             originalJar.copyTo(processedJar, overwrite = true)
@@ -258,19 +160,6 @@ class VersionGeneratorPlugin : Plugin<Project> {
                 }
                 """.trimIndent(),
             )
-
-            // Update iOS Config.xcconfig with version
-            val xcConfigFile = rootProject.file("iosApp/Configuration/Config.xcconfig")
-            if (xcConfigFile.exists()) {
-                val content = xcConfigFile.readText()
-                val updatedContent =
-                    if (content.contains("APP_VERSION=")) {
-                        content.replace(Regex("APP_VERSION=.*"), "APP_VERSION=$appVersion")
-                    } else {
-                        content.trimEnd() + "\nAPP_VERSION=$appVersion\n"
-                    }
-                xcConfigFile.writeText(updatedContent)
-            }
         }
     }
 }

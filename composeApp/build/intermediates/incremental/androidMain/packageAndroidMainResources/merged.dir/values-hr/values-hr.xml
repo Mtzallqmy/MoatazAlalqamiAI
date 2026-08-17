@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="daemon_channel_description">Održava Moataz Alalqami AI pokrenutim za izvršavanje planiranih zadataka</string>
+    <string name="daemon_channel_name">Moataz Alalqami AI usluga daemona</string>
+    <string name="daemon_notification_text">Daemon je pokrenut</string>
+    <string name="download_channel_description">Prikazuje napredak tijekom preuzimanja AI modela</string>
+    <string name="download_channel_name">Preuzimanja modela</string>
+    <string name="download_notification_text">Preuzimanje modela…</string>
+</resources>
