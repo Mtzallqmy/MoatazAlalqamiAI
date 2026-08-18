@@ -82,8 +82,17 @@ class AgentOrchestrator(
     fun reject(id: String) = resolveApproval(id, ApprovalDecision.Blocked("Rejected by user"))
 
     private fun resolveApproval(id: String, decision: ApprovalDecision) {
+        val pending = _pending.value.find { it.id == id }
+        if (pending != null) {
+            ApprovalAuditLog.record(
+                toolId = pending.toolName,
+                toolRisk = pending.toolRisk.name,
+                argsSummary = pending.argsSummary,
+                verdict = if (decision is ApprovalDecision.Blocked) ApprovalAuditLog.Verdict.Rejected else ApprovalAuditLog.Verdict.Approved,
+            )
+        }
         decisions[id] = decision
-        _pending.update { pending -> pending.filterNot { it.id == id } }
+        _pending.update { pendingList -> pendingList.filterNot { it.id == id } }
         runStore.savePending(_pending.value)
     }
 
@@ -142,8 +151,23 @@ class AgentOrchestrator(
                         argsJson = call.argsJson,
                     )
                     when (decision) {
-                        is ApprovalDecision.AutoApproved -> executeToolCall(run, config, call)
+                        is ApprovalDecision.AutoApproved -> {
+                            ApprovalAuditLog.record(
+                                toolId = call.toolId,
+                                toolRisk = toolRuntime.riskLevelFor(call.toolId).name,
+                                argsSummary = call.argsJson.orEmpty().take(120),
+                                verdict = ApprovalAuditLog.Verdict.AutoApproved,
+                            )
+                            executeToolCall(run, config, call)
+                        }
                         is ApprovalDecision.Blocked -> {
+                            ApprovalAuditLog.record(
+                                toolId = call.toolId,
+                                toolRisk = toolRuntime.riskLevelFor(call.toolId).name,
+                                argsSummary = call.argsJson.orEmpty().take(120),
+                                verdict = ApprovalAuditLog.Verdict.Blocked,
+                                note = decision.reason,
+                            )
                             appendStep(run.id, StepKind.Error, "Blocked: ${decision.reason}", "")
                             consecutiveFailures++
                         }
