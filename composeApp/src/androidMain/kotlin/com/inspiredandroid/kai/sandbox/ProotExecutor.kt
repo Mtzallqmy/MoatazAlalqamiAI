@@ -26,6 +26,9 @@ class ProotExecutor(private val launcher: ProotLauncher) {
         workingDir: String = "/root",
         extraEnv: Map<String, String> = emptyMap(),
     ): Map<String, Any> {
+        require(workingDir.isWithinSandbox()) {
+            "Refusing working directory outside the sandbox: $workingDir"
+        }
         val result = launcher.execute(
             command = command,
             timeoutSeconds = timeoutSeconds.coerceIn(1, MAX_TIMEOUT_SECONDS),
@@ -51,19 +54,47 @@ class ProotExecutor(private val launcher: ProotLauncher) {
         extraEnv: Map<String, String> = emptyMap(),
         onStdout: (String) -> Unit,
         onStderr: (String) -> Unit,
-    ): ProotHandle = launcher.startStreaming(
-        command = command,
-        workingDir = workingDir,
-        extraEnv = extraEnv,
-    ) { process, cancelled ->
-        listOf(
-            CompletableFuture.runAsync {
-                streamLines(process.inputStream.bufferedReader(), cancelled, onStdout)
-            },
-            CompletableFuture.runAsync {
-                streamLines(process.errorStream.bufferedReader(), cancelled, onStderr)
-            },
-        )
+    ): ProotHandle {
+        require(workingDir.isWithinSandbox()) {
+            "Refusing working directory outside the sandbox: $workingDir"
+        }
+        return launcher.startStreaming(
+            command = command,
+            workingDir = workingDir,
+            extraEnv = extraEnv,
+        ) { process, cancelled ->
+            listOf(
+                CompletableFuture.runAsync {
+                    streamLines(process.inputStream.bufferedReader(), cancelled, onStdout)
+                },
+                CompletableFuture.runAsync {
+                    streamLines(process.errorStream.bufferedReader(), cancelled, onStderr)
+                },
+            )
+        }
+    }
+
+    private fun String.isWithinSandbox(): Boolean {
+        val normalized = normalize(this)
+        return normalized == "/" ||
+            normalized == "/root" ||
+            normalized.startsWith("/root/") ||
+            normalized.startsWith("/tmp/") ||
+            normalized == "/tmp"
+    }
+
+    /** Collapses `..` / `.` segments without touching the filesystem. */
+    private fun normalize(path: String): String {
+        val parts = path.trimStart('/').split("/").filter { it.isNotEmpty() }
+        val stack = ArrayDeque<String>()
+        for (part in parts) {
+            when {
+                part == ".." -> if (stack.isNotEmpty()) stack.removeLast()
+                part == "." -> {}
+                else -> stack.addLast(part)
+            }
+        }
+        return "/" + stack.joinToString("/")
     }
 
     private fun streamLines(
