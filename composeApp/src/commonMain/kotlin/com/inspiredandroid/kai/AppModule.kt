@@ -109,6 +109,25 @@ val appModule = module {
     single<SkillManager> {
         SkillManager(get<SandboxController>())
     }
+    // AI Gateway coordination layer: one source of truth for routing,
+    // health and usage bookkeeping. Constructor-injected so the repository
+    // never reaches past the coordinator surface.
+    single<com.inspiredandroid.kai.security.ProviderCredentialsResolver> {
+        val resolver = com.inspiredandroid.kai.security.ProviderCredentialsResolver(
+            secretStore = get(),
+            appSettings = get(),
+        )
+        // Install the store once so import/export flows can write secrets to
+        // the vault without a service locator. Written at startup only.
+        com.inspiredandroid.kai.security.SecretStoreHolder.install(get())
+        resolver
+    }
+    single<com.inspiredandroid.kai.gateway.AiGatewayCoordinator> {
+        com.inspiredandroid.kai.gateway.AiGatewayCoordinator.create(
+            settings = get(),
+            credentials = get(),
+        )
+    }
     single<RemoteDataRepository> {
         RemoteDataRepository(
             requests = get(),
@@ -133,6 +152,8 @@ val appModule = module {
             skillManager = get(),
             sandboxController = get(),
             localInferenceEngine = createLocalInferenceEngine(),
+            secretStore = get(),
+            coordinator = get(),
         )
     }
     single<DataRepository> { get<RemoteDataRepository>() }

@@ -81,6 +81,9 @@ private inline fun <T> openAICompatibleResult(block: () -> Result<T>): Result<T>
     block()
 } catch (e: OpenAICompatibleApiException) {
     Result.failure(e)
+} catch (e: kotlinx.coroutines.CancellationException) {
+    // Cancellation must never become a connection error — propagate unchanged.
+    throw e
 } catch (e: Exception) {
     Result.failure(OpenAICompatibleConnectionException())
 }
@@ -119,7 +122,18 @@ class Requests {
 
     class DebugKtorLogger : Logger {
         override fun log(message: String) {
-            println("[KTOR] $message")
+            // Never let secrets leak into logs — mask known credential headers
+            // and header values that look like tokens or keys.
+            val sanitized = sensitiveHeaderRegex.replace(message) { match ->
+                "${match.groupValues[1]}: ***REDACTED***"
+            }
+            println("[KTOR] $sanitized")
+        }
+
+        companion object {
+            // Matches lines like `Authorization: Bearer sk-...` or `x-api-key: abcd1234`.
+            private val sensitiveHeaderRegex =
+                Regex("""^((?i)authorization|x-api-key|x-goog-api-key|api-key)\s*:\s*.+$""", RegexOption.MULTILINE)
         }
     }
 
@@ -141,6 +155,8 @@ class Requests {
         }
     } catch (e: GeminiApiException) {
         Result.failure(e)
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
     } catch (e: Exception) {
         Result.failure(GeminiGenericException("Connection failed", e))
     }
@@ -192,6 +208,8 @@ class Requests {
                 }
             }
         }
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
     } catch (e: Exception) {
         Result.failure(e)
     }
@@ -234,6 +252,8 @@ class Requests {
         Result.failure(e)
     } catch (e: io.ktor.client.plugins.HttpRequestTimeoutException) {
         Result.failure(OpenAICompatibleConnectionException())
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
     } catch (e: Exception) {
         Result.failure(mapOpenAICompatibleException(e))
     }
@@ -321,6 +341,8 @@ class Requests {
         }
     } catch (e: AnthropicApiException) {
         Result.failure(e)
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
     } catch (e: Exception) {
         Result.failure(AnthropicGenericException("Anthropic: ${e.message}", e))
     }
@@ -358,6 +380,8 @@ class Requests {
         }
     } catch (e: AnthropicApiException) {
         Result.failure(e)
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
     } catch (e: Exception) {
         Result.failure(AnthropicGenericException("Anthropic: ${e.message}", e))
     }

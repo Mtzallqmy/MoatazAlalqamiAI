@@ -20,6 +20,12 @@ class McpTool(
     private val metadata: McpToolMetadata,
 ) : Tool {
 
+    /**
+     * MCP tools are UNTRUSTED by default: they are discovered at runtime from
+     * user-configured remote servers, so every call goes through the approval
+     * engine (ToolRisk.RemoteService) and the executor's timeout cap.
+     */
+
     override val schema: ToolSchema = ToolSchema(
         name = metadata.name,
         description = metadata.description,
@@ -27,6 +33,12 @@ class McpTool(
     )
 
     override val timeout: Duration = 60.seconds
+
+    init {
+        require(timeout <= MAX_TIMEOUT) {
+            "MCP tool timeout ${timeout.inWholeSeconds}s exceeds the cap of ${MAX_TIMEOUT.inWholeSeconds}s"
+        }
+    }
 
     override suspend fun execute(args: Map<String, Any>): Any {
         val jsonArgs = buildJsonObject {
@@ -37,6 +49,9 @@ class McpTool(
         return try {
             val result = client.callTool(metadata.name, jsonArgs)
             mapOf("success" to true, "result" to result)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // User cancellation must propagate — never become a tool error result.
+            throw e
         } catch (e: Exception) {
             mapOf("success" to false, "error" to (e.message ?: "MCP tool call failed"))
         }
@@ -67,6 +82,9 @@ class McpTool(
     }
 
     companion object {
+        /** Hard cap for MCP tool execution — prevents a misconfigured server stalling a run. */
+        val MAX_TIMEOUT: Duration = 60.seconds
+
         fun toolId(serverId: String, toolName: String): String = "mcp_${serverId}_$toolName"
 
         fun convertInputSchema(inputSchema: JsonObject?): Map<String, ParameterSchema> {
@@ -86,7 +104,7 @@ class McpTool(
                         val description = propObj["description"]?.jsonPrimitive?.content ?: ""
                         put(name, ParameterSchema(type, description, name in required, rawSchema = propObj))
                     } catch (_: Exception) {
-                        // Skip malformed properties
+                        // Skip malformed properties — schema validation never crashes on bad input.
                     }
                 }
             }

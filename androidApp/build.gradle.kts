@@ -61,6 +61,17 @@ android {
         }
     }
 
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            // 64-bit architectures only — Play Store and direct downloads
+            // no longer ship 32-bit (armeabi-v7a/x86) native code.
+            include("arm64-v8a", "x86_64")
+            isUniversalApk = false
+        }
+    }
+
     buildTypes {
         getByName("release") {
             isMinifyEnabled = true

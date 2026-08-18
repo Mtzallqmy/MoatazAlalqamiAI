@@ -25,6 +25,7 @@ import com.inspiredandroid.kai.inference.getTotalMemoryBytes
 import com.inspiredandroid.kai.linux.LinuxDistro
 import com.inspiredandroid.kai.mcp.McpServerConfig
 import com.inspiredandroid.kai.mcp.McpServerManager
+import com.inspiredandroid.kai.gateway.RoutingProfileId
 import com.inspiredandroid.kai.network.AllServicesFailedException
 import com.inspiredandroid.kai.network.AnthropicInsufficientCreditsException
 import com.inspiredandroid.kai.network.ContextWindowExceededException
@@ -85,7 +86,6 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import org.jetbrains.compose.resources.getString
-import org.koin.core.component.get
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.time.Clock
@@ -177,16 +177,29 @@ class RemoteDataRepository(
     private val skillManager: SkillManager,
     private val sandboxController: SandboxController,
     private val localInferenceEngine: LocalInferenceEngine? = null,
+    /** Optional encrypted secret store used only by the legacy fallback resolver. */
+    private val secretStore: com.inspiredandroid.kai.security.SecretStore? = null,
+    /**
+     * Optional orchestration layer. When provided, provider/model selection,
+     * fallback and usage recording go through the gateway coordinator. When
+     * null (legacy tests / old paths), behavior falls back to direct settings
+     * selection so no existing caller breaks.
+     */
+    private val coordinator: com.inspiredandroid.kai.gateway.AiGatewayCoordinator? = null,
 ) : DataRepository {
 
     private val prettyJson = Json { prettyPrint = true }
-    private val credentialsResolver: com.inspiredandroid.kai.security.ProviderCredentialsResolver by lazy {
-        val koinHelper = object : org.koin.core.component.KoinComponent {}
-        com.inspiredandroid.kai.security.ProviderCredentialsResolver(
-            secretStore = koinHelper.get<com.inspiredandroid.kai.security.SecretStore>(),
-            appSettings = appSettings,
-        )
-    }
+    // Credentials always resolve through the injected coordinator (which owns
+    // the credentials resolver). If no coordinator was injected, fall back to a
+    // resolver built from the injected SecretStore binding via a plain helper —
+    // never via a service locator, so no hidden Koin dependencies at runtime.
+    private val credentialsResolver: com.inspiredandroid.kai.security.ProviderCredentialsResolver
+        get() = coordinator?.credentialResolver
+            ?: com.inspiredandroid.kai.security.ProviderCredentialsResolver(
+                secretStore = secretStore
+                    ?: com.inspiredandroid.kai.security.FallbackSecretStore,
+                appSettings = appSettings,
+            )
 
     /**
      * Returns the tools exposed to the on-device (LiteRT) model. Filtered by name against
@@ -284,19 +297,46 @@ class RemoteDataRepository(
     override fun getInstanceApiKey(instanceId: String): String = appSettings.getInstanceApiKey(instanceId)
 
     override fun updateInstanceApiKey(instanceId: String, apiKey: String) {
-        // Secrets flow exclusively through the encrypted SecretStore; we also keep the
-        // legacy plaintext slot so export/import and the migration stay consistent.
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-            val secretKey = com.inspiredandroid.kai.security.SecretKeys.instanceApiKey(instanceId)
-            runCatching {
-                if (apiKey.isBlank()) {
-                    credentialsResolver.secretStore.remove(secretKey)
-                } else {
+        // Secrets live ONLY in the encrypted SecretStore. If a legacy
+        // plaintext copy exists, erase it — a key must never live in two
+        // places, and it must never be re-written to plaintext here.
+        if (apiKey.isBlank()) {
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                runCatching { credentialsResolver.secretStore.remove(com.inspiredandroid.kai.security.SecretKeys.instanceApiKey(instanceId)) }
+                runCatching { appSettings.removeInstanceApiKey(instanceId) }
+            }
+        } else {
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                runCatching {
                     credentialsResolver.secretStore.put(com.inspiredandroid.kai.security.SecretKeys.instanceApiKey(instanceId), apiKey)
+                    appSettings.removeInstanceApiKey(instanceId)
                 }
             }
         }
-        appSettings.setInstanceApiKey(instanceId, apiKey)
+    }
+
+    // ------------------------------------------------------------------
+    // AI Gateway helper adapters (used by askInternal when a coordinator is
+    // injected). Keep the decision surface small and the internals out of
+    // the repository's protocol knowledge.
+    // ------------------------------------------------------------------
+
+    /** Approximate token count of the outgoing request, for routing and budget gates. */
+    private fun estimateHistoryTokens(messages: List<History>, systemPrompt: String?): Int {
+        val chars = messages.sumOf { it.content.length } + (systemPrompt?.length ?: 0)
+        return (chars / ESTIMATED_CHARS_PER_TOKEN).coerceAtLeast(1)
+    }
+
+    private fun recordProviderError(instanceId: String, error: Exception) {
+        coordinator?.recordProviderError(instanceId, error)
+    }
+
+    private fun recordProviderSuccess(instanceId: String) {
+        coordinator?.recordProviderSuccess(instanceId)
+    }
+
+    private fun recordUsageFor(instanceId: String, serviceId: String) {
+        coordinator?.recordUsageFor(instanceId, serviceId)
     }
 
     override fun getInstanceBaseUrl(instanceId: String, service: Service): String {
@@ -907,7 +947,49 @@ class RemoteDataRepository(
         val messages = chatHistory.value
         val systemPrompt = getActiveSystemPrompt()
 
-        val fallbackEntries = getOrderedFallbackEntries().filter { hasValidInstanceApiKey(it.instanceId, it.service) }
+        var fallbackEntries = getOrderedFallbackEntries().filter { hasValidInstanceApiKey(it.instanceId, it.service) }
+
+        // AI Gateway coordination: routing, budget gate, ordered fallback chain
+        // and per-request health/usage bookkeeping. The coordinator owns *which*
+        // provider/model is tried and in which order; the loop below still owns
+        // the per-attempt chat call so the tool loop is never re-entered
+        // against a mutated history on a blind retry.
+        val gatewayDecision = coordinator?.planRequest(
+            message = question.orEmpty(),
+            hasVisionInput = attachments.any { it.mimeType?.startsWith("image/") == true },
+            requiresTools = com.inspiredandroid.kai.getAvailableTools().isNotEmpty(),
+            contextTokens = estimateHistoryTokens(messages, systemPrompt),
+            configuredInstances = fallbackEntries.map { it.instanceId },
+            instanceServiceIds = fallbackEntries.associate { it.instanceId to it.service.id },
+        )
+        // Respect explicit per-task/per-profile ordering when the gateway picked a chain.
+        if (gatewayDecision != null) {
+            val chained = buildList {
+                gatewayDecision.primary?.providerInstanceId?.let { add(it) }
+                addAll(gatewayDecision.fallbackChain.map { it.providerInstanceId })
+            }
+            if (chained.isNotEmpty()) {
+                val byId = fallbackEntries.associateBy { it.instanceId }
+                fallbackEntries = chained.mapNotNull { byId[it] }
+            }
+            // C21: PrivacyLocalOnly must never silently degrade to a cloud provider.
+            // If no local model survived the chain (router's negative scores removed them),
+            // surface the failure to the user instead of falling back to the cloud.
+            val config = coordinator.currentProfile()
+            if (config.profileId == RoutingProfileId.PrivacyLocalOnly) {
+                val localSurvivors = fallbackEntries.filter { it.service.isOnDevice }
+                if (localSurvivors.isEmpty()) {
+                    throw com.inspiredandroid.kai.network.LocalModelsUnavailableException(
+                        "Privacy profile requires an on-device model; none is available",
+                    )
+                }
+                fallbackEntries = localSurvivors
+            }
+            // Monthly budget gate — checked before any paid request is sent.
+            if (config.maxCostPerRunUsd != null && coordinator.usageRecorder.monthlyCostExceeds(config.maxCostPerRunUsd)) {
+                throw com.inspiredandroid.kai.network.UsageLimitException("Monthly usage limit exceeded")
+            }
+        }
 
         val historyChars = messages.sumOf { it.content.length } + (systemPrompt?.length ?: 0)
 
@@ -942,6 +1024,7 @@ class RemoteDataRepository(
                     // On-device services should not silently fall back — surface the error
                     if (entry.service.isOnDevice) throw e
                     lastException = e
+                    coordinator?.recordProviderError(entry.instanceId, e)
                     _fallbackStatus.value = FallbackStatus(
                         serviceName = entry.service.displayName,
                         errorReason = e.toUiError(),
@@ -949,6 +1032,9 @@ class RemoteDataRepository(
                     )
                     continue
                 }
+                // Record success on the winning provider for health/usage tracking.
+                coordinator?.recordProviderSuccess(entry.instanceId)
+                coordinator?.recordUsageFor(entry.instanceId, entry.service.id)
                 if (index > 0) {
                     fallbackServiceName = entry.service.displayName
                 }

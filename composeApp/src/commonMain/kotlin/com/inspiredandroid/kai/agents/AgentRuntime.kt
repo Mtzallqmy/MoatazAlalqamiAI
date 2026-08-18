@@ -57,7 +57,7 @@ data class AgentStep(
     val kind: StepKind,
     val title: String,
     val detail: String = "",
-    val status: StepStatus = StepStatus.Running,
+    val status: StepStatus = StepStatus.Queued,
     val toolId: String? = null,
     val toolArgsJson: String? = null,
     val toolResultSummary: String? = null,
@@ -80,6 +80,7 @@ enum class StepKind {
 }
 
 enum class StepStatus {
+    Queued,
     Running,
     Done,
     Failed,
@@ -91,6 +92,22 @@ enum class StepStatus {
 /**
  * An agent run: a supervised sequence of [AgentStep] entries with an overall
  * status and cost/usage summary.
+ *
+ * Cancellation contract (any code that executes a run MUST honor it):
+ * - A run is launched on a cancellable coroutine [Job]; user cancellation
+ *   calls `cancel()` on that Job — it must NEVER be awaited with an
+ *   uncancellable context.
+ * - `CancellationException` must never be swallowed, wrapped, or converted
+ *   into a generic network/agent error — it must propagate.
+ * - After cancellation the run status MUST end up in [RunStatus.Cancelled]
+ *   (never stuck in Running); the same applies per-step: cancelled steps end
+ *   in [StepStatus.Cancelled] with a finishedAt timestamp.
+ * - A new run always starts in [RunStatus.Queued] and only moves to Running
+ *   once its executor coroutine has actually begun — an executor must never
+ *   mark the run Running before it owns a cancellable Job.
+ * - A crash (non-cancellation Throwable) transitions to [RunStatus.Failed] —
+ *   with an Error step — so the UI never shows a live run whose executor is
+ *   already dead.
  */
 @Serializable
 data class AgentRun(
@@ -99,7 +116,7 @@ data class AgentRun(
     val agentName: String,
     val projectId: String? = null,
     val prompt: String,
-    val status: RunStatus = RunStatus.Running,
+    val status: RunStatus = RunStatus.Queued,
     val steps: List<AgentStep> = emptyList(),
     val startedAt: Long = System.currentTimeMillis(),
     val finishedAt: Long? = null,
@@ -109,6 +126,7 @@ data class AgentRun(
 )
 
 enum class RunStatus {
+    Queued,
     Running,
     Paused,
     WaitingApproval,

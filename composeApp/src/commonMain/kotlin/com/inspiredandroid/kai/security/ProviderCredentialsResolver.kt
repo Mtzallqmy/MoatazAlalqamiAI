@@ -2,6 +2,7 @@ package com.inspiredandroid.kai.security
 
 import com.inspiredandroid.kai.data.AppSettings
 import com.inspiredandroid.kai.data.getInstanceApiKey
+import com.inspiredandroid.kai.data.removeInstanceApiKey
 import com.inspiredandroid.kai.data.getInstanceBaseUrl
 import com.inspiredandroid.kai.data.getInstanceEffectiveModelId
 import kotlinx.coroutines.CoroutineScope
@@ -28,11 +29,15 @@ class ProviderCredentialsResolver(
         val secretKey = SecretKeys.instanceApiKey(instanceId)
         val secret = secretStore.get(secretKey)
         if (!secret.isNullOrBlank()) return secret
-        // Lazy promotion: legacy plaintext key is copied into the vault.
+        // Lazy promotion: legacy plaintext key is copied into the vault, then
+        // the plaintext copy is erased so a key lives in exactly one place.
         val legacy = appSettings.getInstanceApiKey(instanceId)
         if (legacy.isNotBlank()) {
+            val moved = runCatching { secretStore.put(secretKey, legacy) }.isSuccess
+            if (moved) runCatching { appSettings.removeInstanceApiKey(instanceId) }
             CoroutineScope(Dispatchers.IO).launch {
                 runCatching { secretStore.put(secretKey, legacy) }
+                runCatching { appSettings.removeInstanceApiKey(instanceId) }
             }
             return legacy
         }

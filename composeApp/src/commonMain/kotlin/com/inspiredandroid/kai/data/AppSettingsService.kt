@@ -89,6 +89,11 @@ fun AppSettings.setInstanceApiKey(instanceId: String, apiKey: String) {
     settings.putString("instance_${instanceId}_api_key", apiKey)
 }
 
+/** Erases the legacy plaintext API key for an instance (used after migrating it into the secret vault). */
+fun AppSettings.removeInstanceApiKey(instanceId: String) {
+    settings.remove("instance_${instanceId}_api_key")
+}
+
 fun AppSettings.getInstanceModelId(instanceId: String): String = settings.getString("instance_${instanceId}_model_id", "")
 
 fun AppSettings.setInstanceModelId(instanceId: String, modelId: String) {
