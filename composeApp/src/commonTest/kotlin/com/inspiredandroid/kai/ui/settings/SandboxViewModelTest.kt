@@ -187,7 +187,7 @@ class SandboxViewModelTest {
         val viewModel = SandboxViewModel(fakeRepository, fakeSandboxController)
 
         viewModel.state.test {
-            assertEquals(LinuxDistro.DEBIAN, awaitItem().distro)
+            assertEquals(LinuxDistro.UBUNTU, awaitItem().distro)
 
             viewModel.onSelectDistro(LinuxDistro.ALPINE)
 
@@ -242,7 +242,7 @@ class SandboxViewModelTest {
             testDispatcher.scheduler.advanceUntilIdle()
 
             expectNoEvents()
-            assertEquals(LinuxDistro.DEBIAN, fakeRepository.getSandboxDistro())
+            assertEquals(LinuxDistro.UBUNTU, fakeRepository.getSandboxDistro())
             assertEquals(null, fakeSandboxController.selectedDistro)
         }
     }
@@ -310,7 +310,7 @@ class SandboxViewModelTest {
             testDispatcher.scheduler.advanceUntilIdle()
 
             assertEquals(LinuxDistro.ALPINE, awaitItem().distro)
-            assertEquals(LinuxDistro.DEBIAN, fakeRepository.getSandboxDistro())
+            assertEquals(LinuxDistro.UBUNTU, fakeRepository.getSandboxDistro())
         }
     }
 
