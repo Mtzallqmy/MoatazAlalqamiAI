@@ -31,8 +31,9 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -89,7 +90,10 @@ import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
 import kai.composeapp.generated.resources.Res
 import kai.composeapp.generated.resources.ic_arrow_drop_down
+import kai.composeapp.generated.resources.ic_refresh
 import kai.composeapp.generated.resources.litert_cancel
+import kai.composeapp.generated.resources.settings_fetch_models
+import kai.composeapp.generated.resources.settings_models_discovered
 import kai.composeapp.generated.resources.litert_context_size
 import kai.composeapp.generated.resources.litert_download
 import kai.composeapp.generated.resources.litert_error_checksum_mismatch
@@ -334,6 +338,7 @@ internal fun ServicesContent(uiState: SettingsUiState, actions: SettingsActions)
                     onChangeApiKey = { apiKey -> actions.onChangeApiKey(entry.instanceId, apiKey) },
                     onChangeBaseUrl = { baseUrl -> actions.onChangeBaseUrl(entry.instanceId, baseUrl) },
                     onSelectModel = { modelId -> actions.onSelectModel(entry.instanceId, modelId) },
+                    onRefreshModels = { instanceId -> actions.onRefreshModels(instanceId) },
                     onToggleUseCustomModel = { use -> actions.onToggleUseCustomModel(entry.instanceId, use) },
                     onChangeCustomModelId = { id -> actions.onChangeCustomModelId(entry.instanceId, id) },
                     onRemove = { actions.onRemoveService(entry.instanceId) },
@@ -463,6 +468,7 @@ private fun ConfiguredServiceCardContent(
     onChangeApiKey: (String) -> Unit,
     onChangeBaseUrl: (String) -> Unit,
     onSelectModel: (String) -> Unit,
+    onRefreshModels: (String) -> Unit = {},
     onToggleUseCustomModel: (Boolean) -> Unit = {},
     onChangeCustomModelId: (String) -> Unit = {},
     onRemove: () -> Unit,
@@ -609,6 +615,8 @@ private fun ConfiguredServiceCardContent(
                         onChangeCustomModelId = onChangeCustomModelId,
                         connectionStatus = entry.connectionStatus,
                         onOpenAppPermissionSettings = onOpenAppPermissionSettings,
+                        onRefreshModels = { onRefreshModels(entry.instanceId) },
+                        isRefreshingModels = entry.isRefreshingModels,
                     )
                 } else {
                     ServiceSettings(
@@ -715,6 +723,8 @@ private fun OpenAICompatibleSettings(
     onChangeCustomModelId: (String) -> Unit,
     connectionStatus: ConnectionStatus,
     onOpenAppPermissionSettings: () -> Unit = {},
+    onRefreshModels: () -> Unit = {},
+    isRefreshingModels: Boolean = false,
 ) {
     KaiClearableTextField(
         value = baseUrl,
@@ -748,6 +758,52 @@ private fun OpenAICompatibleSettings(
     Spacer(Modifier.height(8.dp))
 
     ConnectionStatusIndicator(connectionStatus, onOpenAppPermissionSettings)
+
+    Spacer(Modifier.height(8.dp))
+
+    // Quick presets: popular OpenAI-compatible endpoints (one tap fills the base URL)
+    OpenAICompatiblePresets(
+        currentBaseUrl = baseUrl,
+        onSelect = onChangeBaseUrl,
+    )
+
+    // Explicit refresh button + count of discovered models
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(Res.string.settings_models_discovered, models.size),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.handCursor().clickable { onRefreshModels() },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (isRefreshingModels) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            } else {
+                Icon(
+                    imageVector = vectorResource(Res.drawable.ic_refresh),
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = stringResource(Res.string.settings_fetch_models),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
 
     Spacer(Modifier.height(8.dp))
 
@@ -1314,4 +1370,40 @@ private fun ApiKeyField(
         },
         singleLine = singleLine,
     )
+}
+
+@Composable
+private fun OpenAICompatiblePresets(
+    currentBaseUrl: String,
+    onSelect: (String) -> Unit,
+) {
+    val presets = listOf(
+        "Open Router" to "https://openrouter.ai/api/v1",
+        "LM Studio (محلي)" to "http://localhost:1234/v1",
+        "vLLM (محلي)" to "http://localhost:8000/v1",
+        "Ollama (محلي)" to "http://localhost:11434/v1",
+        "Together AI" to "https://api.together.xyz/v1",
+        "Fireworks" to "https://api.fireworks.ai/inference/v1",
+        "Mistral" to "https://api.mistral.ai/v1",
+    )
+    Text(
+        text = "خدمة جاهزة:",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(vertical = 4.dp),
+    )
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        presets.forEach { (label, url) ->
+            FilterChip(
+                selected = currentBaseUrl.trimEnd('/') == url.trimEnd('/'),
+                onClick = { onSelect(url) },
+                label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                modifier = Modifier.handCursor(),
+            )
+        }
+    }
+    Spacer(Modifier.height(8.dp))
 }

@@ -37,6 +37,8 @@ data class ConfiguredServiceEntry(
     /** OpenAI-Compatible only: when true, [customModelId] is used for chat instead of [selectedModel]. */
     val useCustomModel: Boolean = false,
     val customModelId: String = "",
+    /** True while a model-list refresh is in flight for this instance. */
+    val isRefreshingModels: Boolean = false,
 )
 
 enum class ConnectionStatus {

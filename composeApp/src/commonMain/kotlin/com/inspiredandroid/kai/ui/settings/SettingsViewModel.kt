@@ -150,6 +150,7 @@ class SettingsViewModel(
         onChangeApiKey = ::onChangeApiKey,
         onChangeBaseUrl = ::onChangeBaseUrl,
         onSelectModel = ::onSelectModel,
+        onRefreshModels = ::onRefreshModels,
         onToggleUseCustomModel = ::onToggleUseCustomModel,
         onChangeCustomModelId = ::onChangeCustomModelId,
         onToggleTool = ::onToggleTool,
@@ -451,6 +452,28 @@ class SettingsViewModel(
             )
         }
         checkConnectionDebounced(instanceId, entry.service)
+    }
+
+
+    private fun onRefreshModels(instanceId: String) {
+        setRefreshingModels(instanceId, true)
+        viewModelScope.launch {
+            try {
+                refreshInstanceModels(instanceId)
+            } finally {
+                setRefreshingModels(instanceId, false)
+            }
+        }
+    }
+
+    private fun setRefreshingModels(instanceId: String, refreshing: Boolean) {
+        _state.update { state ->
+            state.copy(
+                configuredServices = state.configuredServices.map { e ->
+                    if (e.instanceId == instanceId) e.copy(isRefreshingModels = refreshing) else e
+                }.toImmutableList(),
+            )
+        }
     }
 
     private fun onSelectModel(instanceId: String, modelId: String) {
