@@ -64,6 +64,16 @@ class UnsupportedFileTypeException : ApiException(null)
 class FileTooLargeException : ApiException(null)
 class AllServicesFailedException : ApiException(null)
 
+/** Thrown when a configured usage / cost limit blocks sending a new request. */
+class UsageLimitException(detail: String? = null) : ApiException(detail)
+
+/**
+ * Thrown when a privacy-first routing profile (PrivacyLocalOnly) has no
+ * on-device model available — so the user never silently falls back to
+ * sending their conversation to a cloud provider.
+ */
+class LocalModelsUnavailableException(detail: String? = null) : ApiException(detail)
+
 sealed interface UiError {
     data class Resource(val resource: StringResource) : UiError
     data class Text(val message: String) : UiError
@@ -126,6 +136,13 @@ fun Exception.toUiError(): UiError = when (this) {
     is ContextWindowExceededException -> UiError.Resource(Res.string.error_context_window_exceeded)
 
     is AllServicesFailedException -> UiError.Resource(Res.string.error_all_services_failed)
+
+    is LocalModelsUnavailableException -> UiError.ResourceWithDetail(
+        Res.string.error_unknown,
+        message ?: "No on-device model is available for this privacy profile",
+    )
+
+    is UsageLimitException -> UiError.Resource(Res.string.error_quota_exhausted)
 
     is OpenAICompatibleRequestTooLargeException -> UiError.Resource(Res.string.error_image_too_large)
 
