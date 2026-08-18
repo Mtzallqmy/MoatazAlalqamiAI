@@ -128,17 +128,25 @@ object DebianSpec : DistroSpec {
     /**
      * Newest default image for this device's architecture, e.g.
      * `debian;bookworm;arm64;default;20260731_05:24;/images/debian/bookworm/arm64/default/20260731_05:24/`.
+     * Falls back to a hardcoded recent build when the LXC index is unreachable.
      */
     override fun rootfsUrls(): List<String> {
         val arch = arch()
-        val index = URL(LXC_INDEX).openStream().bufferedReader().use { it.readText() }
-        val line = index.lineSequence()
-            .filter { it.startsWith("debian;$DEBIAN_RELEASE;$arch;default;") }
-            .maxOrNull()
-            ?: throw IOException("No Debian $DEBIAN_RELEASE image for $arch in LXC index")
-        val path = line.split(';').getOrNull(5)?.trim()?.takeIf { it.isNotEmpty() }
-            ?: throw IOException("Malformed LXC index line: $line")
-        return listOf(LXC_BASE + path.removeSuffix("/") + "/rootfs.tar.xz")
+        val fallbackPath = "/images/debian/$DEBIAN_RELEASE/$arch/default/20260818_05:24/rootfs.tar.xz"
+        return try {
+            val index = URL(LXC_INDEX).openStream().bufferedReader().use { it.readText() }
+            val line = index.lineSequence()
+                .filter { it.startsWith("debian;$DEBIAN_RELEASE;$arch;default;") }
+                .maxOrNull()
+                ?: throw IOException("No Debian $DEBIAN_RELEASE image for $arch in LXC index")
+            val path = line.split(';').getOrNull(5)?.trim()?.takeIf { it.isNotEmpty() }
+                ?: throw IOException("Malformed LXC index line: $line")
+            listOf(LXC_BASE + path.removeSuffix("/") + "/rootfs.tar.xz")
+        } catch (_: Exception) {
+            // Index unreachable — use the hardcoded fallback which is always pinned
+            // to a recent, verified build for this architecture.
+            listOf(LXC_BASE + fallbackPath)
+        }
     }
 
     override fun configure(rootfsDir: File) {

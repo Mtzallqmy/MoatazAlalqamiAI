@@ -1,5 +1,6 @@
 package com.inspiredandroid.kai.build.runtime
 
+import android.content.Context
 import android.os.StatFs
 import android.util.Log
 import com.inspiredandroid.kai.build.BuildAgent
@@ -199,9 +200,9 @@ class BuildEnvironmentManager(
      * *same* install it uses, so setting up either one sets up both.
      */
     private val paths: LinuxPaths,
+    appContext: Context? = null,
 ) {
-
-    private val installer = LinuxInstaller(paths)
+    private val installer = LinuxInstaller(paths, appContext ?: paths.appContext)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**

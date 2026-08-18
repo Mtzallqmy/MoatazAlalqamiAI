@@ -31,7 +31,7 @@ class AndroidKaiBuildController : KaiBuildController {
     private val paths: LinuxPaths by lazy { installs.pathsFor(LinuxDistro.DEBIAN) }
 
     private val manager: BuildEnvironmentManager by lazy {
-        BuildEnvironmentManager(paths).also { built ->
+        BuildEnvironmentManager(paths, context).also { built ->
             // Both directions are checked at fire time, not wired once: the chat
             // sandbox can be pointed at this install and away from it while the
             // app runs.

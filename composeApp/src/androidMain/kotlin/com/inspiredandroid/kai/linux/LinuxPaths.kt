@@ -61,7 +61,8 @@ class LinuxPaths(
      */
     private val legacyEvidence: String,
 ) {
-    private val appContext = context.applicationContext
+    private val storedAppContext: Context = context.applicationContext
+    val appContext: Context get() = storedAppContext
 
     val root: File = File(appContext.filesDir, dirName)
     val rootfsDir: File get() = File(root, "rootfs")
