@@ -17,12 +17,16 @@ data class UsageRecord(
     val modelId: String,
     val projectId: String? = null,
     val agentId: String? = null,
+    val taskType: String? = null,
+    val routingProfile: String? = null,
     val inputTokens: Long = 0L,
     val outputTokens: Long = 0L,
     val cachedTokens: Long? = null,
     val latencyMs: Long? = null,
     val success: Boolean = true,
     val estimatedCostUsd: Double = 0.0,
+    /** True when token counts / cost were estimated rather than reported by the provider. */
+    val isEstimate: Boolean = false,
 )
 
 /**
@@ -34,6 +38,7 @@ data class UsageWindow(
     val totalOutputTokens: Long,
     val totalCostUsd: Double,
     val avgLatencyMs: Double?,
+    val successRate: Double,
 )
 
 /**
@@ -65,14 +70,15 @@ class UsageRecorder(settings: AppSettings) {
 
     fun window(startEpochMs: Long): UsageWindow {
         val records = loadAll().filter { it.epochMs >= startEpochMs }
-        val cost = records.filter { it.success }.sumOf { it.estimatedCostUsd }
+        val successful = records.filter { it.success }
         return UsageWindow(
             records = records,
-            totalInputTokens = records.filter { it.success }.sumOf { it.inputTokens },
-            totalOutputTokens = records.filter { it.success }.sumOf { it.outputTokens },
-            totalCostUsd = cost,
+            totalInputTokens = successful.sumOf { it.inputTokens },
+            totalOutputTokens = successful.sumOf { it.outputTokens },
+            totalCostUsd = successful.sumOf { it.estimatedCostUsd },
             avgLatencyMs = records.mapNotNull { it.latencyMs }.takeIf { it.isNotEmpty() }
                 ?.let { it.sum().toDouble() / it.size },
+            successRate = if (records.isEmpty()) 1.0 else records.count { it.success }.toDouble() / records.size,
         )
     }
 
@@ -80,13 +86,45 @@ class UsageRecorder(settings: AppSettings) {
     fun week(): UsageWindow = window(System.currentTimeMillis() - 7 * 24 * 60 * 60 * 1000L)
     fun month(): UsageWindow = window(System.currentTimeMillis() - 30 * 24 * 60 * 60 * 1000L)
 
-    fun byProvider(): Map<String, UsageWindow> =
-        loadAll().map { it.providerInstanceId }.distinct().associateWith { pid ->
+    /**
+     * Per-provider usage with real aggregates (tokens, cost, latency, success
+     * rate) — empty window per provider means the provider was not used in the
+     * observed period.
+     */
+    fun byProvider(): Map<String, UsageWindow> {
+        val all = loadAll()
+        val providers = all.map { it.providerInstanceId }.distinct()
+        return providers.associateWith { pid ->
+            val records = all.filter { it.providerInstanceId == pid }
+            val successful = records.filter { it.success }
             UsageWindow(
-                records = loadAll().filter { it.providerInstanceId == pid },
-                totalInputTokens = 0, totalOutputTokens = 0, totalCostUsd = 0.0, avgLatencyMs = null,
+                records = records,
+                totalInputTokens = successful.sumOf { it.inputTokens },
+                totalOutputTokens = successful.sumOf { it.outputTokens },
+                totalCostUsd = successful.sumOf { it.estimatedCostUsd },
+                avgLatencyMs = records.mapNotNull { it.latencyMs }.takeIf { it.isNotEmpty() }
+                    ?.let { it.sum().toDouble() / it.size },
+                successRate = if (records.isEmpty()) 1.0 else records.count { it.success }.toDouble() / records.size,
             )
         }
+    }
+
+    fun byTaskType(): Map<String, UsageWindow> {
+        val all = loadAll().filter { !it.taskType.isNullOrBlank() }
+        return all.map { it.taskType!! }.distinct().associateWith { tt ->
+            val filtered = all.filter { it.taskType == tt }
+            val successful = filtered.filter { it.success }
+            UsageWindow(
+                records = filtered,
+                totalInputTokens = successful.sumOf { it.inputTokens },
+                totalOutputTokens = successful.sumOf { it.outputTokens },
+                totalCostUsd = successful.sumOf { it.estimatedCostUsd },
+                avgLatencyMs = filtered.mapNotNull { it.latencyMs }.takeIf { it.isNotEmpty() }
+                    ?.let { it.sum().toDouble() / it.size },
+                successRate = if (filtered.isEmpty()) 1.0 else filtered.count { it.success }.toDouble() / filtered.size,
+            )
+        }
+    }
 
     /** Monthly budget check — caller decides whether to warn or block. */
     fun monthlyCostExceeds(limitUsd: Double): Boolean = month().totalCostUsd > limitUsd
@@ -105,7 +143,7 @@ class UsageRecorder(settings: AppSettings) {
 
         fun startOfDay(): Long {
             val now = System.currentTimeMillis()
-            val msPerDay = 24 * 60 * 60 * 1000L
+            val msPerDay = 24 * 60 * 1000L
             return now - now % msPerDay
         }
     }

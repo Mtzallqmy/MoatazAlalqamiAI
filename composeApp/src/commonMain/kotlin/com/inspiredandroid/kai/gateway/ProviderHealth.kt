@@ -19,6 +19,7 @@ enum class HealthState {
     NetworkError,
     RateLimited,
     ModelUnavailable,
+    Timeout,
     Disabled,
 }
 
@@ -36,6 +37,12 @@ data class ProviderHealthRecord(
     val isRateLimited: Boolean = false,
     /** Cooldown: skip health checks until this epoch (protects paid quotas). */
     val cooldownUntilEpochMs: Long = 0L,
+    /** Last successful request epoch. Null until the instance answers once. */
+    val lastSuccessAtEpochMs: Long = 0L,
+    /** Last failed request epoch. Used by dashboards and recovery decisions. */
+    val lastFailureAtEpochMs: Long = 0L,
+    /** Consecutive failures since the last success — drives auto-recovery. */
+    val consecutiveFailures: Int = 0,
 )
 
 /**
@@ -66,14 +73,18 @@ class ProviderHealthRegistry(
         modelsCount: Int? = null,
     ) {
         val now = System.currentTimeMillis()
+        val existing = recordFor(instanceId)
         val record = ProviderHealthRecord(
             instanceId = instanceId,
             state = state,
             latencyMs = latencyMs,
             lastCheckEpochMs = now,
-            modelsCount = modelsCount ?: recordFor(instanceId).modelsCount,
+            modelsCount = modelsCount ?: existing.modelsCount,
             isRateLimited = state == HealthState.RateLimited,
-            cooldownUntilEpochMs = if (state == HealthState.RateLimited) now + RATE_LIMIT_COOLDOWN_MS else 0L,
+            cooldownUntilEpochMs = if (state == HealthState.RateLimited) now + RATE_LIMIT_COOLDOWN_MS else existing.cooldownUntilEpochMs,
+            lastSuccessAtEpochMs = if (state == HealthState.Connected) now else existing.lastSuccessAtEpochMs,
+            lastFailureAtEpochMs = if (isFailureState(state)) now else existing.lastFailureAtEpochMs,
+            consecutiveFailures = if (isFailureState(state)) existing.consecutiveFailures + 1 else 0,
         )
         _records.value = _records.value + (instanceId to record)
         persist(record)
@@ -91,12 +102,47 @@ class ProviderHealthRegistry(
         update(instanceId, HealthState.NetworkError)
     }
 
+    fun recordTimeout(instanceId: String) {
+        update(instanceId, HealthState.Timeout)
+    }
+
+    /** Marks a request to the instance as successful — refreshes health state. */
+    fun recordSuccess(instanceId: String, latencyMs: Long? = null) {
+        update(instanceId, HealthState.Connected, latencyMs = latencyMs)
+    }
+
+    /** Maps a classified error into the matching health record update. */
+    fun recordError(instanceId: String, error: AiRequestError) {
+        when (error) {
+            is AiRequestError.AuthenticationError -> recordAuthError(instanceId)
+            is AiRequestError.RateLimitError -> recordRateLimit(instanceId)
+            is AiRequestError.NetworkError -> recordNetworkError(instanceId)
+            is AiRequestError.TimeoutError -> recordTimeout(instanceId)
+            is AiRequestError.ModelUnavailableError -> update(instanceId, HealthState.ModelUnavailable)
+            is AiRequestError.ContentModerationError,
+            is AiRequestError.ContextExceededError,
+            is AiRequestError.InvalidRequestError,
+            is AiRequestError.LocalModelProblemError,
+            is AiRequestError.UsageLimitError,
+            is AiRequestError.UnknownError,
+            is AiRequestError.CancelledError -> {
+                // Not provider-health relevant: cancelled, client-side, or local
+                // issues must not poison the remote provider's health state.
+            }
+        }
+    }
+
     /** Whether a request to this instance should route elsewhere due to health. */
     fun isUnhealthy(instanceId: String): Boolean {
         val record = recordFor(instanceId)
-        if (record.state == HealthState.AuthError || record.state == HealthState.ModelUnavailable) return true
+        if (record.state == HealthState.AuthError ||
+            record.state == HealthState.ModelUnavailable ||
+            record.state == HealthState.Disabled
+        ) return true
         if (record.isRateLimited && System.currentTimeMillis() < record.cooldownUntilEpochMs) return true
-        return false
+        // Repeated failures without recovery: stay out of the fast path.
+        return record.consecutiveFailures >= FAILURES_BEFORE_COOLDOWN &&
+            System.currentTimeMillis() - record.lastFailureAtEpochMs < FAILURE_COOLDOWN_MS
     }
 
     /** Seconds until a rate-limited instance can be retried, or 0. */
@@ -117,27 +163,41 @@ class ProviderHealthRegistry(
 
     private fun loadPersisted(instanceId: String): ProviderHealthRecord {
         val raw = try { settings.getStringOrNull(KEY_HEALTH_PREFIX + instanceId) } catch (_: Exception) { null }
-        return if (!raw.isNullOrBlank()) parseHealthJson(raw) else ProviderHealthRecord(instanceId)
+        return if (!raw.isNullOrBlank()) parseHealthJson(instanceId, raw) else ProviderHealthRecord(instanceId)
     }
 
     /** Serialize with a minimal inline format to avoid pulling another dependency. */
     private fun healthJson(record: ProviderHealthRecord): String =
-        "${record.state.name}|${record.latencyMs ?: ""}|${record.lastCheckEpochMs}|${record.modelsCount ?: ""}|${record.cooldownUntilEpochMs}"
+        "${record.state.name}|${record.latencyMs ?: ""}|${record.lastCheckEpochMs}|${record.modelsCount ?: ""}|" +
+        "${record.cooldownUntilEpochMs}|${record.lastSuccessAtEpochMs}|${record.lastFailureAtEpochMs}|${record.consecutiveFailures}"
 
-    private fun parseHealthJson(raw: String): ProviderHealthRecord {
+    private fun parseHealthJson(instanceId: String, raw: String): ProviderHealthRecord {
         val parts = raw.split("|")
         val state = runCatching { HealthState.valueOf(parts.getOrElse(0) { "Unknown" }) }.getOrDefault(HealthState.Unknown)
         val latency = parts.getOrElse(1) { "" }.toLongOrNull()
         val lastCheck = parts.getOrElse(2) { "0" }.toLong()
         val modelsCount = parts.getOrElse(3) { "" }.toIntOrNull()
         val cooldown = parts.getOrElse(4) { "0" }.toLong()
-        val instanceId = ""
-        return ProviderHealthRecord(instanceId, state, latency, lastCheck, modelsCount, state == HealthState.RateLimited, cooldown)
+        val lastSuccess = parts.getOrElse(5) { "0" }.toLong()
+        val lastFailure = parts.getOrElse(6) { "0" }.toLong()
+        val failures = parts.getOrElse(7) { "0" }.toIntOrNull() ?: 0
+        return ProviderHealthRecord(instanceId, state, latency, lastCheck, modelsCount,
+            state == HealthState.RateLimited, cooldown, lastSuccess, lastFailure, failures)
     }
 
     companion object {
         private const val KEY_HEALTH_PREFIX = "provider_health_"
         /** Default cooldown after a 429: 5 minutes (or use Retry-After when known). */
         private const val RATE_LIMIT_COOLDOWN_MS = 5 * 60 * 1000L
+        /** After this many consecutive failures the instance cools down briefly. */
+        private const val FAILURES_BEFORE_COOLDOWN = 3
+        /** Brief auto-recovery cooldown window. */
+        private const val FAILURE_COOLDOWN_MS = 2 * 60 * 1000L
+
+        private fun isFailureState(state: HealthState): Boolean = state in FAILURE_STATES
+        private val FAILURE_STATES = setOf(
+            HealthState.NetworkError, HealthState.Timeout, HealthState.RateLimited,
+            HealthState.ModelUnavailable,
+        )
     }
 }

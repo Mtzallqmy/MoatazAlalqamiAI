@@ -7,21 +7,6 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 /**
- * Task type inferred by the [TaskClassifier]. Routing decisions are driven by
- * task type + required capabilities — never by a raw string in the UI layer.
- */
-enum class TaskType {
-    Chat,
-    Coding,
-    Reasoning,
-    Research,
-    Vision,
-    Summarization,
-    Planning,
-    FastAnswer,
-}
-
-/**
  * One of the built-in or custom routing profiles (section 7 of the prompt).
  * Each profile defines preference weights and hard constraints; the router
  * scores every available model against them.
@@ -64,63 +49,7 @@ data class RoutingProfileConfig(
 )
 
 /**
- * Heuristic-only task classifier. No LLM call is ever needed: keywords and
- * simple structure rules decide the task type. An optional small router model
- * could refine this later, but heuristics are reliable enough for the core
- * profiles and cost nothing.
- */
-object TaskClassifier {
-
-    private val codingKeywords = listOf(
-        "fix bug", "fix the bug", "bug in", "refactor", "implement ", "implement a",
-        "write code", "write a function", "write a test", "tests", "unit test",
-        "compile", "build ", "lint", "error in", "exception", "crash", "stack trace",
-        "pull request", "commit", "git ", "branch", "dependency", "package.json",
-        "gradle", "kotlin", "python", "node", "npm", "install ", "ci/cd",
-        "code review", "add endpoint", "api ", "function ", "class ",
-    )
-
-    private val reasoningKeywords = listOf(
-        "think step by step", "step-by-step", "reason", "proof", "prove",
-        "solve ", "calculate", "math", "equation", "logic puzzle", "analyze ",
-        "explain the reasoning", "why does", "deep think",
-    )
-
-    private val researchKeywords = listOf(
-        "research ", "find information", "search the web", "browse", "look up",
-        "summary of", "summarize this", "overview of", "who is", "what is",
-        "compare ", "comparison", "latest news", "current events", "read this page",
-    )
-
-    private val visionKeywords = listOf(
-        "screenshot", "image", "photo", "picture", "analyze this image",
-        "describe the image", "vision", "ocr", "chart", "graph", "diagram",
-        "what do you see", "scan",
-    )
-
-    private val summarizationKeywords = listOf(
-        "summarize", "summary", "tl;dr", "tldr", "brief", "condense",
-        "key points", "main points", "in short",
-    )
-
-    fun classify(message: String): TaskType {
-        val lower = message.lowercase()
-        // A message with an image part attached is at least a vision task.
-        val scores = mapOf(
-            TaskType.Coding to codingKeywords.count { lower.contains(it) },
-            TaskType.Reasoning to reasoningKeywords.count { lower.contains(it) },
-            TaskType.Research to researchKeywords.count { lower.contains(it) },
-            TaskType.Vision to visionKeywords.count { lower.contains(it) },
-            TaskType.Summarization to summarizationKeywords.count { lower.contains(it) },
-            TaskType.FastAnswer to if (lower.length < 60 && lower.endsWith("?")) 1 else 0,
-        )
-        val best = scores.maxByOrNull { it.value }
-        return if (best == null || best.value == 0) TaskType.Chat else best.key
-    }
-}
-
-/**
- * A candidate model scored for a routing request. Higher is better.
+ * A candidate model scored for a routing request. Higher score is better.
  */
 data class ModelCandidate(
     val modelId: String,
@@ -133,6 +62,21 @@ data class ModelCandidate(
 )
 
 /**
+ * The full routing decision — not just a single winner. Consumers get the
+ * selected primary candidate, the ordered fallback chain (highest to lowest
+ * score after the primary), and diagnostic warnings/rejection reasons so
+ * failures can be surfaced to the user or the health registry.
+ */
+data class RoutingDecision(
+    val taskType: TaskType,
+    val profileId: RoutingProfileId,
+    val primary: ModelCandidate?,
+    val fallbackChain: List<ModelCandidate>,
+    val estimatedCostUsd: Double = 0.0,
+    val warnings: List<String> = emptyList(),
+)
+
+/**
  * Smart model router. Pure, deterministic, no network calls.
  *
  * Selection pipeline:
@@ -140,7 +84,7 @@ data class ModelCandidate(
  * 2. Apply hard constraints (capabilities, local/cloud, allow/block lists,
  *    health, budget).
  * 3. Score surviving candidates against profile weights.
- * 4. Order the fallback chain from highest to lowest score.
+ * 4. Order the primary + fallback chain from highest to lowest score.
  */
 class ModelRouter(
     settings: AppSettings,
@@ -148,7 +92,8 @@ class ModelRouter(
 ) {
     private val settings: Settings = settings.settings
 
-    fun selectModel(
+    /** All candidates for a request, ordered from best to worst (includes the primary). */
+    fun selectAllCandidates(
         taskType: TaskType,
         hasVisionInput: Boolean,
         requiresTools: Boolean,
@@ -156,7 +101,7 @@ class ModelRouter(
         profileId: RoutingProfileId = currentProfile().profileId,
         configuredInstances: List<String>,
         instanceServiceIds: Map<String, String>,
-    ): ModelCandidate? {
+    ): RoutingDecision {
         val config = currentProfile()
         val capabilities = buildCapabilitiesFilter(taskType, hasVisionInput, requiresTools)
 
@@ -180,8 +125,42 @@ class ModelRouter(
         // permanently excludes the candidate from selection, regardless of score.
         val pool = candidates.filter { it.rejectionReasons.none { r -> r != "unhealthy" } }
         val ordered = pool.sortedByDescending { it.score }
-        return ordered.firstOrNull()
+        val poolSet = pool.toSet()
+
+        val warnings = buildList {
+            val rejectedHard = candidates.filter { it !in poolSet }
+            if (rejectedHard.isNotEmpty()) {
+                val reasons = rejectedHard.flatMap { it.rejectionReasons }.toSet()
+                if (reasons.any { it in HARD_REJECTION_REASONS }) add("hard_rejections: $reasons")
+            }
+            val unhealthy = candidates.count { "unhealthy" in it.rejectionReasons }
+            if (unhealthy > 0) add("$unhealthy instance(s) skipped for health reasons")
+            if (ordered.isEmpty()) add("no eligible model found — routing will fail")
+        }
+
+        val primary = ordered.firstOrNull()
+        return RoutingDecision(
+            taskType = taskType,
+            profileId = config.profileId,
+            primary = primary,
+            fallbackChain = if (primary != null) ordered.drop(1) else ordered,
+            estimatedCostUsd = primary?.costUsd ?: 0.0,
+            warnings = warnings,
+        )
     }
+
+    /** Convenience: the single best model (or null) for callers that only need one. */
+    fun selectModel(
+        taskType: TaskType,
+        hasVisionInput: Boolean,
+        requiresTools: Boolean,
+        contextTokens: Int,
+        profileId: RoutingProfileId = currentProfile().profileId,
+        configuredInstances: List<String>,
+        instanceServiceIds: Map<String, String>,
+    ): ModelCandidate? =
+        selectAllCandidates(taskType, hasVisionInput, requiresTools, contextTokens,
+            profileId, configuredInstances, instanceServiceIds).primary
 
     private fun scoreInstance(
         instanceId: String,
@@ -215,9 +194,6 @@ class ModelRouter(
         }
         if (capabilities.contains("tools") && curated?.supportsToolCalling != true) {
             rejection += "no_tools"
-        }
-        if (curated?.isLocal == true && config.cloudAllowed.not()) {
-            // fine — local only allows local models
         }
         if (curated?.isLocal != true && config.profileId == RoutingProfileId.PrivacyLocalOnly) {
             rejection += "cloud_blocked"
@@ -330,5 +306,8 @@ class ModelRouter(
     companion object {
         private const val KEY_ROUTING_PROFILE = "routing_profile_config"
         private const val KEY_PROJECT_ROUTING_PREFIX = "project_routing_profile_"
+        private val HARD_REJECTION_REASONS = setOf(
+            "no_vision", "no_tools", "cloud_blocked", "blocked", "not_allowed", "over_budget",
+        )
     }
 }
