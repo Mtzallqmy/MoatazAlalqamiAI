@@ -16,6 +16,23 @@ enum class ApprovalMode {
 }
 
 /**
+ * Human-readable categories assigned to tools by the registry. Categories map
+ * to [ToolRisk] so that approval policy decisions stay consistent even when
+ * risk semantics evolve. Note that [CredentialAccess] and [Destructive] map
+ * straight to [ToolRisk.Dangerous]: access to stored secrets and irreversible
+ * actions always require explicit approval.
+ */
+enum class ToolCategory(val risk: ToolRisk, val displayName: String) {
+    ReadOnly(ToolRisk.SafeRead, "Read Only"),
+    LocalWrite(ToolRisk.LocalWrite, "Local Write"),
+    ExternalWrite(ToolRisk.NetworkWrite, "External Write"),
+    Network(ToolRisk.NetworkWrite, "Network"),
+    SensitiveData(ToolRisk.NetworkWrite, "Sensitive Data"),
+    Destructive(ToolRisk.Dangerous, "Destructive"),
+    CredentialAccess(ToolRisk.Dangerous, "Credential Access"),
+}
+
+/**
  * Decision returned by the [ApprovalEngine] for one pending tool call.
  */
 sealed class ApprovalDecision {
@@ -97,9 +114,36 @@ class ApprovalEngine(
 
     private fun isDestructiveGit(argsJson: String?): String? {
         if (argsJson == null) return null
+        // Structured analysis first: when args expose a parsed command/argv list
+        // (e.g. `{"argv":["git","reset","--hard"]}` or `{"command":["git","clean","-fd"]}`),
+        // check tokens individually — this defeats hidden-newline / encoded-word
+        // evasion that substring matching over the raw JSON would miss.
+        val tokens = runCatching {
+            val obj = Json.parseToJsonElement(argsJson)
+            val array = (obj as? kotlinx.serialization.json.JsonObject)
+                ?.get("argv")
+                ?.let { it as? kotlinx.serialization.json.JsonArray }
+                ?: (obj as? kotlinx.serialization.json.JsonObject)
+                    ?.get("command")
+                    ?.let { it as? kotlinx.serialization.json.JsonArray }
+            array?.mapNotNull { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+        }.getOrNull()
+        if (tokens != null) {
+            val normalized = tokens.map { it.lowercase() }
+            val hasResetHard = "reset" in normalized && "--hard" in normalized
+            val hasCleanFd = "clean" in normalized && ("-fd" in normalized || "-f" in normalized && "-d" in normalized)
+            val hasForcePush = "push" in normalized && ("--force" in normalized || "-f" in normalized)
+            return when {
+                hasResetHard -> "git reset --hard is forbidden without explicit approval"
+                hasCleanFd -> "git clean -fd is forbidden without explicit approval"
+                hasForcePush -> "force push is forbidden without explicit approval"
+                else -> null
+            }
+        }
+        // Unstructured fallback: raw substring scan of the whole args JSON.
         val lower = argsJson.lowercase()
         return when {
-            lower.contains("reset --hard") || lower.contains("reset --hard") -> "git reset --hard is forbidden without explicit approval"
+            lower.contains("reset --hard") || lower.contains("reset\\u0020--hard") -> "git reset --hard is forbidden without explicit approval"
             lower.contains("git clean -fd") || lower.contains("clean -fd") -> "git clean -fd is forbidden without explicit approval"
             lower.contains("--force") && lower.contains("push") -> "force push is forbidden without explicit approval"
             else -> null
