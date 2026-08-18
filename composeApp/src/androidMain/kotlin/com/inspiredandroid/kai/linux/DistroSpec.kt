@@ -128,12 +128,24 @@ object DebianSpec : DistroSpec {
     /**
      * Newest default image for this device's architecture, e.g.
      * `debian;bookworm;arm64;default;20260731_05:24;/images/debian/bookworm/arm64/default/20260731_05:24/`.
-     * Falls back to a hardcoded recent build when the LXC index is unreachable.
+     *
+     * Resolution order for arm64 devices:
+     * 1. Pre-built rootfs hosted on this repo's GitHub Releases (guaranteed
+     *    availability, pre-installed base packages + OpenCode) — tried first.
+     * 2. LXC index for the newest default image.
+     * 3. Hardcoded recent LXC build as a last resort.
+     *
+     * Non-arm64 devices skip the GitHub asset and go straight to LXC.
      */
     override fun rootfsUrls(): List<String> {
         val arch = arch()
+        val githubAssetUrl = when {
+            arch == "arm64" -> "https://github.com/Mtzallqmy/MoatazAlalqamiAI/releases/download/v3.1.0/moataz-debian-rootfs-arm64.tar.xz"
+            arch == "amd64" -> "https://github.com/Mtzallqmy/MoatazAlalqamiAI/releases/download/v3.1.0/moataz-debian-rootfs-x86_64.tar.xz"
+            else -> null
+        }
         val fallbackPath = "/images/debian/$DEBIAN_RELEASE/$arch/default/20260818_05:24/rootfs.tar.xz"
-        return try {
+        val lxcCandidates = try {
             val index = URL(LXC_INDEX).openStream().bufferedReader().use { it.readText() }
             val line = index.lineSequence()
                 .filter { it.startsWith("debian;$DEBIAN_RELEASE;$arch;default;") }
@@ -147,6 +159,7 @@ object DebianSpec : DistroSpec {
             // to a recent, verified build for this architecture.
             listOf(LXC_BASE + fallbackPath)
         }
+        return if (githubAssetUrl != null) listOf(githubAssetUrl) + lxcCandidates else lxcCandidates
     }
 
     override fun configure(rootfsDir: File) {
