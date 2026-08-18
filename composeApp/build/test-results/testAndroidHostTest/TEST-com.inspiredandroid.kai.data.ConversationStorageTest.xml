@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.data.ConversationStorageTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:12.889Z" hostname="db71298c03d4" time="0.008">
+  <properties/>
+  <testcase name="chat-layer save without transcript preserves the stored transcript" classname="com.inspiredandroid.kai.data.ConversationStorageTest" time="0.003"/>
+  <testcase name="deleteConversation removes it from flow and persistence" classname="com.inspiredandroid.kai.data.ConversationStorageTest" time="0.0"/>
+  <testcase name="updateShellTranscript trims older lines beyond the char budget" classname="com.inspiredandroid.kai.data.ConversationStorageTest" time="0.001"/>
+  <testcase name="updateShellTranscript is a no-op for unsaved conversations" classname="com.inspiredandroid.kai.data.ConversationStorageTest" time="0.0"/>
+  <testcase name="single oversized line keeps its tail" classname="com.inspiredandroid.kai.data.ConversationStorageTest" time="0.001"/>
+  <testcase name="saving an existing conversation replaces it in place" classname="com.inspiredandroid.kai.data.ConversationStorageTest" time="0.0"/>
+  <testcase name="saved conversations survive a reload through a fresh storage" classname="com.inspiredandroid.kai.data.ConversationStorageTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.ui.chat.ChatViewModelExtendedTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:28.080Z" hostname="db71298c03d4" time="0.075">
+  <properties/>
+  <testcase name="cancel stops an in-flight ask and resets isLoading" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelExtendedTest" time="0.021"/>
+  <testcase name="files list defaults to empty" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelExtendedTest" time="0.003"/>
+  <testcase name="selectService is a no-op when instanceId is unknown" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelExtendedTest" time="0.007"/>
+  <testcase name="showPrivacyInfo is false when current service is not Free" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelExtendedTest" time="0.003"/>
+  <testcase name="exitInteractiveMode clears the flag and stops loading" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelExtendedTest" time="0.006"/>
+  <testcase name="clearSnackbar clears the snackbar message" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelExtendedTest" time="0.006"/>
+  <testcase name="enterInteractiveMode sets the flag and clears error" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelExtendedTest" time="0.005"/>
+  <testcase name="regenerate truncates to last user message and re-asks with null" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelExtendedTest" time="0.006"/>
+  <testcase name="startNewChat clears history error and isLoading" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelExtendedTest" time="0.005"/>
+  <testcase name="concurrent ask is ignored while a previous ask is still loading" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelExtendedTest" time="0.006"/>
+  <testcase name="selectService reorders configured services so the selected instance is first" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelExtendedTest" time="0.006"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

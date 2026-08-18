@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.ui.sandbox.RankSearchResultsTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:28.647Z" hostname="db71298c03d4" time="0.001">
+  <properties/>
+  <testcase name="exact name match ranks first" classname="com.inspiredandroid.kai.ui.sandbox.RankSearchResultsTest" time="0.0"/>
+  <testcase name="segment prefix ranks above plain contains" classname="com.inspiredandroid.kai.ui.sandbox.RankSearchResultsTest" time="0.0"/>
+  <testcase name="ranking is case insensitive" classname="com.inspiredandroid.kai.ui.sandbox.RankSearchResultsTest" time="0.0"/>
+  <testcase name="blank query leaves order unchanged" classname="com.inspiredandroid.kai.ui.sandbox.RankSearchResultsTest" time="0.0"/>
+  <testcase name="name prefix matches rank above description-only matches" classname="com.inspiredandroid.kai.ui.sandbox.RankSearchResultsTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

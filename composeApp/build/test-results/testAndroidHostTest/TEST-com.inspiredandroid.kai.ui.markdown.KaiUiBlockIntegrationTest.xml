@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.ui.markdown.KaiUiBlockIntegrationTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:28.372Z" hostname="db71298c03d4" time="0.001">
+  <properties/>
+  <testcase name="malformed kai-ui fence produces KaiUiError" classname="com.inspiredandroid.kai.ui.markdown.KaiUiBlockIntegrationTest" time="0.0"/>
+  <testcase name="kai-ui fence produces KaiUiBlock" classname="com.inspiredandroid.kai.ui.markdown.KaiUiBlockIntegrationTest" time="0.0"/>
+  <testcase name="ndjson multi-line kai-ui wraps children in a column" classname="com.inspiredandroid.kai.ui.markdown.KaiUiBlockIntegrationTest" time="0.0"/>
+  <testcase name="kai-ui block speakable text walks the node tree" classname="com.inspiredandroid.kai.ui.markdown.KaiUiBlockIntegrationTest" time="0.0"/>
+  <testcase name="split-block pattern with json fence is treated as kai-ui" classname="com.inspiredandroid.kai.ui.markdown.KaiUiBlockIntegrationTest" time="0.001"/>
+  <testcase name="kai-ui block surrounded by markdown produces three blocks" classname="com.inspiredandroid.kai.ui.markdown.KaiUiBlockIntegrationTest" time="0.0"/>
+  <system-out><![CDATA[kai-ui parse error: Unexpected JSON token at offset 5: Expected EOF after parsing, but had j instead at path: $
+JSON input: not json at all | not json at all
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

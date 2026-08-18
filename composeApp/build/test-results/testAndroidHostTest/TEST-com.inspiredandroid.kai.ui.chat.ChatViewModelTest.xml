@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.ui.chat.ChatViewModelTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:28.181Z" hostname="db71298c03d4" time="0.073">
+  <properties/>
+  <testcase name="setIsSpeaking updates speaking state" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelTest" time="0.005"/>
+  <testcase name="restore runs off the main thread and flips isRestoring" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelTest" time="0.004"/>
+  <testcase name="clearHistory clears history and error" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelTest" time="0.004"/>
+  <testcase name="failed ask with AnthropicInvalidApiKeyException sets error" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelTest" time="0.005"/>
+  <testcase name="successful ask adds messages to history" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelTest" time="0.004"/>
+  <testcase name="failed ask with GeminiRateLimitExceededException sets error" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelTest" time="0.004"/>
+  <testcase name="initial state reflects isUsingSharedKey from repository" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelTest" time="0.002"/>
+  <testcase name="ask completes successfully and updates history" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelTest" time="0.004"/>
+  <testcase name="toggleSpeechOutput toggles isSpeechOutputEnabled" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelTest" time="0.005"/>
+  <testcase name="failed ask with GroqInvalidApiKeyException sets error" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelTest" time="0.003"/>
+  <testcase name="failed ask with AnthropicOverloadedException sets error" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelTest" time="0.004"/>
+  <testcase name="allowFileAttachment is true when repository supports it" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelTest" time="0.004"/>
+  <testcase name="failed ask with GroqRateLimitExceededException sets error" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelTest" time="0.004"/>
+  <testcase name="failed ask with AnthropicInsufficientCreditsException sets error" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelTest" time="0.004"/>
+  <testcase name="failed ask with GeminiInvalidApiKeyException sets error" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelTest" time="0.003"/>
+  <testcase name="failed ask with AnthropicRateLimitExceededException sets error" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelTest" time="0.004"/>
+  <testcase name="retry calls ask with null" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelTest" time="0.004"/>
+  <testcase name="ask clears previous error" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelTest" time="0.004"/>
+  <testcase name="allowFileAttachment is false when repository does not support it" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

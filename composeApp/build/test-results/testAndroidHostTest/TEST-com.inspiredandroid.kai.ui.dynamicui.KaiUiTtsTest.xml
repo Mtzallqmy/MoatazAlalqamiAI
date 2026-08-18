@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.ui.dynamicui.KaiUiTtsTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:28.345Z" hostname="db71298c03d4" time="0.011">
+  <properties/>
+  <testcase name="speaks text nodes and button labels inside a kai-ui fence" classname="com.inspiredandroid.kai.ui.dynamicui.KaiUiTtsTest" time="0.003"/>
+  <testcase name="plain markdown passes through strip-markdown" classname="com.inspiredandroid.kai.ui.dynamicui.KaiUiTtsTest" time="0.007"/>
+  <testcase name="speaks alert title and message" classname="com.inspiredandroid.kai.ui.dynamicui.KaiUiTtsTest" time="0.0"/>
+  <testcase name="skips code nodes" classname="com.inspiredandroid.kai.ui.dynamicui.KaiUiTtsTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

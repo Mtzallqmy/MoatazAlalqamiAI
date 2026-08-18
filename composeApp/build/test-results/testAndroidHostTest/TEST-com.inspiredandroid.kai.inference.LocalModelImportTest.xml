@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.inference.LocalModelImportTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:27.541Z" hostname="db71298c03d4" time="0.006">
+  <properties/>
+  <testcase name="isLitertlmExtension_acceptsCaseInsensitive" classname="com.inspiredandroid.kai.inference.LocalModelImportTest" time="0.001"/>
+  <testcase name="sanitizeImportFileName_stripsPathAndUnsafeChars" classname="com.inspiredandroid.kai.inference.LocalModelImportTest" time="0.0"/>
+  <testcase name="resolveImportTarget_matchesCatalogByFileName" classname="com.inspiredandroid.kai.inference.LocalModelImportTest" time="0.001"/>
+  <testcase name="resolveImportTarget_avoidsNameCollisions" classname="com.inspiredandroid.kai.inference.LocalModelImportTest" time="0.003"/>
+  <testcase name="isCustomModelId_detectsPrefix" classname="com.inspiredandroid.kai.inference.LocalModelImportTest" time="0.001"/>
+  <testcase name="resolveImportTarget_rejectsNonLitertlm" classname="com.inspiredandroid.kai.inference.LocalModelImportTest" time="0.0"/>
+  <testcase name="customLocalModel_synthesizesMetadata" classname="com.inspiredandroid.kai.inference.LocalModelImportTest" time="0.0"/>
+  <testcase name="resolveImportTarget_customGoesToImports" classname="com.inspiredandroid.kai.inference.LocalModelImportTest" time="0.0"/>
+  <testcase name="findCatalogModelByFileName_isCaseInsensitive" classname="com.inspiredandroid.kai.inference.LocalModelImportTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.data.ConversationSerializationTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:12.875Z" hostname="db71298c03d4" time="0.012">
+  <properties/>
+  <testcase name="deserialize conversation with all fields" classname="com.inspiredandroid.kai.data.ConversationSerializationTest" time="0.001"/>
+  <testcase name="deserialize conversation ignores legacy fields" classname="com.inspiredandroid.kai.data.ConversationSerializationTest" time="0.0"/>
+  <testcase name="deserialize conversation with special characters in content" classname="com.inspiredandroid.kai.data.ConversationSerializationTest" time="0.001"/>
+  <testcase name="deserialize message ignores unknown keys" classname="com.inspiredandroid.kai.data.ConversationSerializationTest" time="0.0"/>
+  <testcase name="deserialize empty conversations list" classname="com.inspiredandroid.kai.data.ConversationSerializationTest" time="0.0"/>
+  <testcase name="deserialize ConversationsData with default version" classname="com.inspiredandroid.kai.data.ConversationSerializationTest" time="0.0"/>
+  <testcase name="round trip shell transcript with all line variants" classname="com.inspiredandroid.kai.data.ConversationSerializationTest" time="0.003"/>
+  <testcase name="deserialize ConversationsData with version" classname="com.inspiredandroid.kai.data.ConversationSerializationTest" time="0.001"/>
+  <testcase name="serialize conversation with null optional fields" classname="com.inspiredandroid.kai.data.ConversationSerializationTest" time="0.001"/>
+  <testcase name="deserialize conversation with unicode content" classname="com.inspiredandroid.kai.data.ConversationSerializationTest" time="0.0"/>
+  <testcase name="round trip conversation with multiple messages" classname="com.inspiredandroid.kai.data.ConversationSerializationTest" time="0.001"/>
+  <testcase name="serialize and deserialize conversation with multi-attachment message" classname="com.inspiredandroid.kai.data.ConversationSerializationTest" time="0.001"/>
+  <testcase name="deserialize legacy single-file message keeps old fields readable" classname="com.inspiredandroid.kai.data.ConversationSerializationTest" time="0.001"/>
+  <testcase name="deserialize conversation ignores unknown keys" classname="com.inspiredandroid.kai.data.ConversationSerializationTest" time="0.0"/>
+  <testcase name="serialize ConversationsData includes version" classname="com.inspiredandroid.kai.data.ConversationSerializationTest" time="0.0"/>
+  <testcase name="deserialize conversation message with optional fields missing" classname="com.inspiredandroid.kai.data.ConversationSerializationTest" time="0.0"/>
+  <testcase name="serialize conversation includes all fields" classname="com.inspiredandroid.kai.data.ConversationSerializationTest" time="0.0"/>
+  <testcase name="deserialize conversation with empty messages list" classname="com.inspiredandroid.kai.data.ConversationSerializationTest" time="0.001"/>
+  <testcase name="legacy conversation without shell transcript loads with empty list" classname="com.inspiredandroid.kai.data.ConversationSerializationTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

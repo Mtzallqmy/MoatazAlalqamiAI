@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.ui.chat.ChatViewModelLiteRTTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:28.156Z" hostname="db71298c03d4" time="0.017">
+  <properties/>
+  <testcase name="no warning when LiteRT is secondary service with no models" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelLiteRTTest" time="0.003"/>
+  <testcase name="no warning when primary service is not on-device" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelLiteRTTest" time="0.003"/>
+  <testcase name="no warning when LiteRT has downloaded models" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelLiteRTTest" time="0.003"/>
+  <testcase name="warning shown when LiteRT is primary service with no downloaded models" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelLiteRTTest" time="0.002"/>
+  <testcase name="warning cleared after switching to non-on-device service" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelLiteRTTest" time="0.006"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

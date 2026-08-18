@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.gateway.ModelRouterTest" tests="16" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:12.492Z" hostname="db71298c03d4" time="0.136">
+  <properties/>
+  <testcase name="allow list restricts candidates" classname="com.inspiredandroid.kai.gateway.ModelRouterTest" time="0.112"/>
+  <testcase name="search keywords classify as research" classname="com.inspiredandroid.kai.gateway.ModelRouterTest" time="0.001"/>
+  <testcase name="summarize keywords classify as summarization" classname="com.inspiredandroid.kai.gateway.ModelRouterTest" time="0.0"/>
+  <testcase name="coding model wins even when service ids are swapped" classname="com.inspiredandroid.kai.gateway.ModelRouterTest" time="0.009"/>
+  <testcase name="vision task rejects models without vision capability" classname="com.inspiredandroid.kai.gateway.ModelRouterTest" time="0.001"/>
+  <testcase name="code keywords classify as coding" classname="com.inspiredandroid.kai.gateway.ModelRouterTest" time="0.0"/>
+  <testcase name="privacy local only rejects cloud services" classname="com.inspiredandroid.kai.gateway.ModelRouterTest" time="0.001"/>
+  <testcase name="blocked provider is never selected" classname="com.inspiredandroid.kai.gateway.ModelRouterTest" time="0.0"/>
+  <testcase name="plain question classifies as fast answer" classname="com.inspiredandroid.kai.gateway.ModelRouterTest" time="0.001"/>
+  <testcase name="local first profile prefers local services" classname="com.inspiredandroid.kai.gateway.ModelRouterTest" time="0.002"/>
+  <testcase name="explicit per-task model wins outright" classname="com.inspiredandroid.kai.gateway.ModelRouterTest" time="0.0"/>
+  <testcase name="vision keywords classify as vision" classname="com.inspiredandroid.kai.gateway.ModelRouterTest" time="0.0"/>
+  <testcase name="empty message classifies as chat" classname="com.inspiredandroid.kai.gateway.ModelRouterTest" time="0.001"/>
+  <testcase name="math keywords classify as reasoning" classname="com.inspiredandroid.kai.gateway.ModelRouterTest" time="0.0"/>
+  <testcase name="profile config survives a JSON roundtrip through settings" classname="com.inspiredandroid.kai.gateway.ModelRouterTest" time="0.001"/>
+  <testcase name="no configured instances means no selection" classname="com.inspiredandroid.kai.gateway.ModelRouterTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.linux.AptPackageManagerTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:27.556Z" hostname="db71298c03d4" time="0.004">
+  <properties/>
+  <testcase name="search skips apt diagnostics and continuation lines" classname="com.inspiredandroid.kai.linux.AptPackageManagerTest" time="0.002"/>
+  <testcase name="dpkg format asks for the status field parseInstalled filters on" classname="com.inspiredandroid.kai.linux.AptPackageManagerTest" time="0.0"/>
+  <testcase name="only the E prefix counts as a failure" classname="com.inspiredandroid.kai.linux.AptPackageManagerTest" time="0.0"/>
+  <testcase name="installed list is sorted by name regardless of dpkg order" classname="com.inspiredandroid.kai.linux.AptPackageManagerTest" time="0.001"/>
+  <testcase name="skips packages that are removed but keep their config" classname="com.inspiredandroid.kai.linux.AptPackageManagerTest" time="0.0"/>
+  <testcase name="parses dpkg-query output into name and version" classname="com.inspiredandroid.kai.linux.AptPackageManagerTest" time="0.0"/>
+  <testcase name="install avoids recommends so a phone rootfs stays small" classname="com.inspiredandroid.kai.linux.AptPackageManagerTest" time="0.0"/>
+  <testcase name="parses apt-cache search into name and description with no version" classname="com.inspiredandroid.kai.linux.AptPackageManagerTest" time="0.0"/>
+  <testcase name="reads the upgraded count off apt's summary line" classname="com.inspiredandroid.kai.linux.AptPackageManagerTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

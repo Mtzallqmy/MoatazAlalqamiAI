@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.ui.sandbox.BreadcrumbsTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:28.643Z" hostname="db71298c03d4" time="0.003">
+  <properties/>
+  <testcase name="a trailing slash on the root does not add an empty crumb" classname="com.inspiredandroid.kai.ui.sandbox.BreadcrumbsTest" time="0.003"/>
+  <testcase name="filesystem root keeps the sandbox trail" classname="com.inspiredandroid.kai.ui.sandbox.BreadcrumbsTest" time="0.0"/>
+  <testcase name="a path outside the root collapses to the root" classname="com.inspiredandroid.kai.ui.sandbox.BreadcrumbsTest" time="0.0"/>
+  <testcase name="sitting on the root offers nothing above it" classname="com.inspiredandroid.kai.ui.sandbox.BreadcrumbsTest" time="0.0"/>
+  <testcase name="project root is the first crumb" classname="com.inspiredandroid.kai.ui.sandbox.BreadcrumbsTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

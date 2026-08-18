@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" tests="30" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:28.717Z" hostname="db71298c03d4" time="0.129">
+  <properties/>
+  <testcase name="rapid onRemoveService keeps the new pendingDeletion after the previous commits" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.028"/>
+  <testcase name="adding Anthropic service shows no models before validation" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.003"/>
+  <testcase name="onSelectTab updates currentTab" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.004"/>
+  <testcase name="onToggleTool does not crash with no mcp servers" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.003"/>
+  <testcase name="onToggleScheduling persists and reflects in state" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.002"/>
+  <testcase name="onChangeEmailPollInterval persists and reflects in state" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.003"/>
+  <testcase name="onChangeUiScale persists and reflects in state" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.003"/>
+  <testcase name="onToggleMcpServer disables server and updates status" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.003"/>
+  <testcase name="onChangeBaseUrl resets connectionStatus to Unknown" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.005"/>
+  <testcase name="showAddMcpServerDialog toggles correctly" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.003"/>
+  <testcase name="onChangeHeartbeatInterval persists and reflects in state" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.004"/>
+  <testcase name="initial state has empty mcp servers when none configured" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.002"/>
+  <testcase name="onToggleMemory persists and reflects in state" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.004"/>
+  <testcase name="onSelectModel marks the chosen model as selected on the repository" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.003"/>
+  <testcase name="onChangeApiKey clears models for that instance" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.003"/>
+  <testcase name="onChangeApiKey persists to repository" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.004"/>
+  <testcase name="initial state reflects configured services" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.002"/>
+  <testcase name="onRemoveMcpServer removes server" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.005"/>
+  <testcase name="availableServicesToAdd contains all non-Free services" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.002"/>
+  <testcase name="adding same service type twice creates unique instanceIds" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.003"/>
+  <testcase name="onExpandService updates expandedServiceId" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.003"/>
+  <testcase name="initial state has empty configured services when none configured" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.003"/>
+  <testcase name="onChangeApiKey updates API key for specific instance" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.009"/>
+  <testcase name="onChangeBaseUrl persists to repository" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.004"/>
+  <testcase name="onToggleDynamicUi persists and reflects in state" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.003"/>
+  <testcase name="onAddService adds a new configured service" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.004"/>
+  <testcase name="onRemoveService removes a configured service by instanceId" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.002"/>
+  <testcase name="onAddMcpServer adds server and closes dialog" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.004"/>
+  <testcase name="onToggleFreeFallback persists and reflects in state" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.003"/>
+  <testcase name="onSaveSoul persists soul text" classname="com.inspiredandroid.kai.ui.settings.SettingsViewModelTest" time="0.003"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" tests="23" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:28.650Z" hostname="db71298c03d4" time="0.033">
+  <properties/>
+  <testcase name="start keeps unsaved editor edits instead of reloading" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.004"/>
+  <testcase name="confirmRename invalid name short-circuits without controller call" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.002"/>
+  <testcase name="confirmDelete clears editor and shows dedicated snackbar when deleted file is open" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.001"/>
+  <testcase name="confirmDelete on file calls controller with recursive false and refreshes" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.001"/>
+  <testcase name="confirmDelete failure surfaces failed snackbar and keeps list" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.001"/>
+  <testcase name="confirmRename of currently-open file updates editor path without reload" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.002"/>
+  <testcase name="a read-only buffer cannot be edited or saved" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.001"/>
+  <testcase name="start does not emit when the listing is unchanged" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.003"/>
+  <testcase name="start reloads the open editor when the buffer is clean" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.001"/>
+  <testcase name="state stream emits expected snackbar transitions on delete" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.001"/>
+  <testcase name="start on an already-loaded directory never flips loading on" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.001"/>
+  <testcase name="start leaves the editor loaded when the file becomes unreadable" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.001"/>
+  <testcase name="requestDelete sets pendingDelete and cancelDelete clears it" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.001"/>
+  <testcase name="start re-lists a directory that changed while the browser was hidden" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.001"/>
+  <testcase name="a missing file reports Unreadable" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.001"/>
+  <testcase name="refresh that resolves after navigating away does not overwrite the new directory" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.001"/>
+  <testcase name="a non-UTF-8 file opens as Binary and force opens it read-only" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.002"/>
+  <testcase name="confirmRename collision sets error on renaming state and keeps dialog open" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.001"/>
+  <testcase name="navigateTo back to a previously visited directory re-lists it" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.001"/>
+  <testcase name="an oversized file reports TooLarge rather than Binary" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.002"/>
+  <testcase name="requestRename seeds input with entry name" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.001"/>
+  <testcase name="confirmDelete on directory calls controller with recursive true" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.001"/>
+  <testcase name="confirmRename success refreshes list and shows success snackbar" classname="com.inspiredandroid.kai.ui.sandbox.SandboxFileBrowserViewModelTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

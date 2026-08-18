@@ -171,8 +171,14 @@ class ModelRouter(
             )
         }
 
-        val healthy = candidates.filter { it.rejectionReasons.none { r -> r == "unhealthy" } }
-        val pool = healthy.ifEmpty { candidates }
+        // Hard rejections (block lists, capability gaps, budget, local-only, etc.)
+        // are never silently downgraded — they must be excluded unless every
+        // candidate is rejected, in which case we surface the best of the
+        // remaining pool so the caller can report the failure reason.
+        // "unhealthy" is the only transient rejection — everything else
+        // (block lists, capability gaps, budget, local-only) is hard and
+        // permanently excludes the candidate from selection, regardless of score.
+        val pool = candidates.filter { it.rejectionReasons.none { r -> r != "unhealthy" } }
         val ordered = pool.sortedByDescending { it.score }
         return ordered.firstOrNull()
     }

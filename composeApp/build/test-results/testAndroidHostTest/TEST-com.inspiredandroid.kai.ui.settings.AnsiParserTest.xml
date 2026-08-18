@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.ui.settings.AnsiParserTest" tests="32" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:28.684Z" hostname="db71298c03d4" time="0.009">
+  <properties/>
+  <testcase name="incomplete CSI at end of string does not crash" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.001"/>
+  <testcase name="256 color foreground in standard range maps to standard palette" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.001"/>
+  <testcase name="code 22 turns off bold" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="bold style is applied" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="plain text gets default color span" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.001"/>
+  <testcase name="256 color foreground via 38 5 sets exact color" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="standard background green is applied" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="code 23 turns off italic" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.001"/>
+  <testcase name="empty SGR resets state" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="OSC sequence terminated with ESC backslash is stripped" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="empty string returns empty AnnotatedString" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="bright background colors use bright palette" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="bright foreground colors use bright palette" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.001"/>
+  <testcase name="underline applies underline decoration" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="chained codes apply both styles" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="non-SGR CSI sequences are stripped" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="256 color grayscale range maps to gray colors" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="256 color background via 48 5 sets background" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.001"/>
+  <testcase name="strikethrough applies linethrough decoration" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="reset clears all styles" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="italic style is applied" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="OSC sequence terminated with BEL is stripped" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="standard foreground red is applied" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="unknown escape after ESC is consumed" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="dim style applies light weight" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="cursor movement CSI is stripped" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="underline and strikethrough combine into a single decoration" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.002"/>
+  <testcase name="multiple text runs include each segment" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="plain text without escapes is returned unchanged" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="style persists across multiple text runs until reset" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <testcase name="default foreground reset clears fg color" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.001"/>
+  <testcase name="unknown SGR codes are ignored" classname="com.inspiredandroid.kai.ui.settings.AnsiParserTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

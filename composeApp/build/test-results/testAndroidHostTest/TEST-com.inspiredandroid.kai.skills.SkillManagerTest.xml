@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.skills.SkillManagerTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:27.759Z" hostname="db71298c03d4" time="0.134">
+  <properties/>
+  <testcase name="load reads installed skill folders with their files" classname="com.inspiredandroid.kai.skills.SkillManagerTest" time="0.122"/>
+  <testcase name="load ignores folders without a SKILL_md" classname="com.inspiredandroid.kai.skills.SkillManagerTest" time="0.002"/>
+  <testcase name="uninstall deletes the folder" classname="com.inspiredandroid.kai.skills.SkillManagerTest" time="0.005"/>
+  <testcase name="reinstall replaces the previous folder contents" classname="com.inspiredandroid.kai.skills.SkillManagerTest" time="0.002"/>
+  <testcase name="install writes the folder and surfaces the skill" classname="com.inspiredandroid.kai.skills.SkillManagerTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+]]></system-err>
+</testsuite>

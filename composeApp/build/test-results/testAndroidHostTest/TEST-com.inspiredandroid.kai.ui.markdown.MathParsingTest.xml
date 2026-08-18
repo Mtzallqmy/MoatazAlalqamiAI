@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.ui.markdown.MathParsingTest" tests="17" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:28.379Z" hostname="db71298c03d4" time="0.002">
+  <properties/>
+  <testcase name="streaming unclosed display math yields empty-ish block" classname="com.inspiredandroid.kai.ui.markdown.MathParsingTest" time="0.0"/>
+  <testcase name="dollar followed by digit is not math" classname="com.inspiredandroid.kai.ui.markdown.MathParsingTest" time="0.001"/>
+  <testcase name="escaped dollar is literal" classname="com.inspiredandroid.kai.ui.markdown.MathParsingTest" time="0.0"/>
+  <testcase name="inline dollar math" classname="com.inspiredandroid.kai.ui.markdown.MathParsingTest" time="0.0"/>
+  <testcase name="inline backslash paren math" classname="com.inspiredandroid.kai.ui.markdown.MathParsingTest" time="0.0"/>
+  <testcase name="display math block with double dollar on own lines" classname="com.inspiredandroid.kai.ui.markdown.MathParsingTest" time="0.0"/>
+  <testcase name="display math single line block" classname="com.inspiredandroid.kai.ui.markdown.MathParsingTest" time="0.0"/>
+  <testcase name="double dollar inline treated as math" classname="com.inspiredandroid.kai.ui.markdown.MathParsingTest" time="0.0"/>
+  <testcase name="math with nested braces and escapes" classname="com.inspiredandroid.kai.ui.markdown.MathParsingTest" time="0.0"/>
+  <testcase name="math inside emphasis does not break" classname="com.inspiredandroid.kai.ui.markdown.MathParsingTest" time="0.0"/>
+  <testcase name="latex code fence renders as display math" classname="com.inspiredandroid.kai.ui.markdown.MathParsingTest" time="0.0"/>
+  <testcase name="tex code fence renders as display math" classname="com.inspiredandroid.kai.ui.markdown.MathParsingTest" time="0.0"/>
+  <testcase name="display math bracket form multi-line" classname="com.inspiredandroid.kai.ui.markdown.MathParsingTest" time="0.0"/>
+  <testcase name="display math bracket form" classname="com.inspiredandroid.kai.ui.markdown.MathParsingTest" time="0.0"/>
+  <testcase name="dollar with space after opener is not math" classname="com.inspiredandroid.kai.ui.markdown.MathParsingTest" time="0.0"/>
+  <testcase name="non-math code fence stays as code" classname="com.inspiredandroid.kai.ui.markdown.MathParsingTest" time="0.0"/>
+  <testcase name="math code fence renders as display math" classname="com.inspiredandroid.kai.ui.markdown.MathParsingTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

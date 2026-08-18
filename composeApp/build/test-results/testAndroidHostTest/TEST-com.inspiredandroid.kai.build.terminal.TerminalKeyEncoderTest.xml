@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.build.terminal.TerminalKeyEncoderTest" tests="17" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:12.658Z" hostname="db71298c03d4" time="0.01">
+  <properties/>
+  <testcase name="altBackspaceDeletesWord" classname="com.inspiredandroid.kai.build.terminal.TerminalKeyEncoderTest" time="0.001"/>
+  <testcase name="shiftTabIsCbt" classname="com.inspiredandroid.kai.build.terminal.TerminalKeyEncoderTest" time="0.0"/>
+  <testcase name="enterIsCarriageReturn" classname="com.inspiredandroid.kai.build.terminal.TerminalKeyEncoderTest" time="0.0"/>
+  <testcase name="arrowsUseSs3InApplicationCursorMode" classname="com.inspiredandroid.kai.build.terminal.TerminalKeyEncoderTest" time="0.002"/>
+  <testcase name="altEnterPrefixesEscape" classname="com.inspiredandroid.kai.build.terminal.TerminalKeyEncoderTest" time="0.0"/>
+  <testcase name="tildeKeysCarryModifiers" classname="com.inspiredandroid.kai.build.terminal.TerminalKeyEncoderTest" time="0.004"/>
+  <testcase name="modifiersCombine" classname="com.inspiredandroid.kai.build.terminal.TerminalKeyEncoderTest" time="0.001"/>
+  <testcase name="modifierParamFollowsXterm" classname="com.inspiredandroid.kai.build.terminal.TerminalKeyEncoderTest" time="0.0"/>
+  <testcase name="escapeIsEsc" classname="com.inspiredandroid.kai.build.terminal.TerminalKeyEncoderTest" time="0.0"/>
+  <testcase name="homeAndEndUseCsi" classname="com.inspiredandroid.kai.build.terminal.TerminalKeyEncoderTest" time="0.0"/>
+  <testcase name="encodeTextPassesPlainTextThrough" classname="com.inspiredandroid.kai.build.terminal.TerminalKeyEncoderTest" time="0.0"/>
+  <testcase name="arrowsUseCsiByDefault" classname="com.inspiredandroid.kai.build.terminal.TerminalKeyEncoderTest" time="0.001"/>
+  <testcase name="plainAndAltCharsPassThrough" classname="com.inspiredandroid.kai.build.terminal.TerminalKeyEncoderTest" time="0.0"/>
+  <testcase name="ctrlCharsFoldIntoC0Range" classname="com.inspiredandroid.kai.build.terminal.TerminalKeyEncoderTest" time="0.0"/>
+  <testcase name="backspaceIsDelNotBackspace" classname="com.inspiredandroid.kai.build.terminal.TerminalKeyEncoderTest" time="0.0"/>
+  <testcase name="encodeTextAppliesLatchToFirstCharacterOnly" classname="com.inspiredandroid.kai.build.terminal.TerminalKeyEncoderTest" time="0.0"/>
+  <testcase name="modifiedArrowsStayCsiEvenInApplicationMode" classname="com.inspiredandroid.kai.build.terminal.TerminalKeyEncoderTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

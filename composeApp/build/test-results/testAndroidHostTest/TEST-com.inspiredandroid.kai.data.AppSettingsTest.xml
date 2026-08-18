@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.data.AppSettingsTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:12.836Z" hostname="db71298c03d4" time="0.006">
+  <properties/>
+  <testcase name="base URL migration skips non-OpenAI-compatible instances" classname="com.inspiredandroid.kai.data.AppSettingsTest" time="0.001"/>
+  <testcase name="custom model migration prefills custom id from list model without enabling flag" classname="com.inspiredandroid.kai.data.AppSettingsTest" time="0.0"/>
+  <testcase name="base URL migration also migrates legacy per-service key" classname="com.inspiredandroid.kai.data.AppSettingsTest" time="0.0"/>
+  <testcase name="base URL migration handles trailing slash" classname="com.inspiredandroid.kai.data.AppSettingsTest" time="0.0"/>
+  <testcase name="effective model id uses custom when flag is on" classname="com.inspiredandroid.kai.data.AppSettingsTest" time="0.0"/>
+  <testcase name="base URL migration only runs once" classname="com.inspiredandroid.kai.data.AppSettingsTest" time="0.001"/>
+  <testcase name="base URL migration preserves custom version path" classname="com.inspiredandroid.kai.data.AppSettingsTest" time="0.0"/>
+  <testcase name="migration adds services with legacy API keys" classname="com.inspiredandroid.kai.data.AppSettingsTest" time="0.001"/>
+  <testcase name="Anthropic credential persistence via instance settings" classname="com.inspiredandroid.kai.data.AppSettingsTest" time="0.001"/>
+  <testcase name="base URL migration appends v1 to plain host URL" classname="com.inspiredandroid.kai.data.AppSettingsTest" time="0.0"/>
+  <testcase name="base URL migration does not double-append v1" classname="com.inspiredandroid.kai.data.AppSettingsTest" time="0.0"/>
+  <testcase name="removeInstanceSettings clears custom model keys" classname="com.inspiredandroid.kai.data.AppSettingsTest" time="0.0"/>
+  <testcase name="base URL migration skips blank base URLs" classname="com.inspiredandroid.kai.data.AppSettingsTest" time="0.001"/>
+  <testcase name="migration only runs once so deleted services stay deleted" classname="com.inspiredandroid.kai.data.AppSettingsTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

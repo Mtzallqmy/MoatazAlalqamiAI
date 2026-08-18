@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" tests="40" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:28.634Z" hostname="db71298c03d4" time="0.008">
+  <properties/>
+  <testcase name="unknown environment swallows body without crashing" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.001"/>
+  <testcase name="superscript single char" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="bmod renders as bare mod function" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="overline widens across content" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.001"/>
+  <testcase name="hat accent produces Accent HAT" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="unclosed accent brace does not crash" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="empty input gives empty group" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="unknown command renders as literal backslash-name" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.001"/>
+  <testcase name="nested fractions" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="arrow relation" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="primes collapse into single sym" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="implies and iff map to long arrows" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="bmatrix and vmatrix pick correct delimiters" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.001"/>
+  <testcase name="lim is a LargeOp with subscript" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="greek letter command resolves to Unicode VARIABLE sym" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="digits collapse into a single ORDINARY sym" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="sub and sup attached to same base" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="boldsymbol wraps in BOLD_ITALIC style" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.001"/>
+  <testcase name="unmatched opening brace does not throw" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="superscript with braces groups the whole expression" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="issue 150 integral reproducer parses without error" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="pmatrix 2x2 parses rows and cells" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="cases environment produces left-aligned matrix with left brace" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="text preserves spaces" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="binom parses as parenthesized borderless frac" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.001"/>
+  <testcase name="sqrt with and without index" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="mathbb maps uppercase letters to double-struck via Styled" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="left and right with dot is empty delim" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="quadratic formula full parse does not throw" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="pmod expands to parenthesized mod group" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="single variable letter is a VARIABLE sym" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="integral with limits" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="function name sin is a FUNCTION sym" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="left and right parens" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="vec accent with multi-char base" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="unclosed matrix still returns Matrix with collected rows" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="sum with subscript and superscript produces LargeOp with limits" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="aligned uses ALIGN_RL mode and no delimiters" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="fraction parses numerator and denominator" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <testcase name="subscript single char" classname="com.inspiredandroid.kai.ui.markdown.math.MathAtomParserTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

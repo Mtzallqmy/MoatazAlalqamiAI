@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.ui.markdown.StreamingToleranceTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:28.383Z" hostname="db71298c03d4" time="0.247">
+  <properties/>
+  <testcase name="trailing incomplete paragraph still renders" classname="com.inspiredandroid.kai.ui.markdown.StreamingToleranceTest" time="0.0"/>
+  <testcase name="deeply nested emphasis does not crash" classname="com.inspiredandroid.kai.ui.markdown.StreamingToleranceTest" time="0.001"/>
+  <testcase name="deeply nested list does not crash" classname="com.inspiredandroid.kai.ui.markdown.StreamingToleranceTest" time="0.235"/>
+  <testcase name="partial link yields literal text" classname="com.inspiredandroid.kai.ui.markdown.StreamingToleranceTest" time="0.0"/>
+  <testcase name="extremely deep blockquote does not crash" classname="com.inspiredandroid.kai.ui.markdown.StreamingToleranceTest" time="0.008"/>
+  <testcase name="long run of bracket openers does not crash" classname="com.inspiredandroid.kai.ui.markdown.StreamingToleranceTest" time="0.0"/>
+  <testcase name="huge single paragraph falls back to plain text" classname="com.inspiredandroid.kai.ui.markdown.StreamingToleranceTest" time="0.0"/>
+  <testcase name="unclosed code fence yields open fence" classname="com.inspiredandroid.kai.ui.markdown.StreamingToleranceTest" time="0.0"/>
+  <testcase name="long run of asterisks does not crash" classname="com.inspiredandroid.kai.ui.markdown.StreamingToleranceTest" time="0.002"/>
+  <testcase name="unclosed emphasis yields literal text" classname="com.inspiredandroid.kai.ui.markdown.StreamingToleranceTest" time="0.0"/>
+  <testcase name="partial image yields literal text" classname="com.inspiredandroid.kai.ui.markdown.StreamingToleranceTest" time="0.0"/>
+  <testcase name="truncated kai-ui json is repaired into a block" classname="com.inspiredandroid.kai.ui.markdown.StreamingToleranceTest" time="0.0"/>
+  <testcase name="document always renders - even after malformed table" classname="com.inspiredandroid.kai.ui.markdown.StreamingToleranceTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

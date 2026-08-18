@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.mcp.PopularMcpServersTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:27.570Z" hostname="db71298c03d4" time="0.002">
+  <properties/>
+  <testcase name="authorizationHeaderValue prefixes Bearer when missing" classname="com.inspiredandroid.kai.mcp.PopularMcpServersTest" time="0.0"/>
+  <testcase name="matchesPopularMcpUrl treats jina v1 and sse as same host" classname="com.inspiredandroid.kai.mcp.PopularMcpServersTest" time="0.0"/>
+  <testcase name="jina popular entry requires auth and has no default secret headers" classname="com.inspiredandroid.kai.mcp.PopularMcpServersTest" time="0.0"/>
+  <testcase name="mergeMissingHeaders adds missing defaults" classname="com.inspiredandroid.kai.mcp.PopularMcpServersTest" time="0.0"/>
+  <testcase name="applyPopularDefaultHeaders is no-op for jina without default headers" classname="com.inspiredandroid.kai.mcp.PopularMcpServersTest" time="0.0"/>
+  <testcase name="mergeMissingHeaders keeps existing Authorization" classname="com.inspiredandroid.kai.mcp.PopularMcpServersTest" time="0.001"/>
+  <testcase name="applyPopularDefaultHeaders is no-op when nothing to migrate" classname="com.inspiredandroid.kai.mcp.PopularMcpServersTest" time="0.0"/>
+  <testcase name="mergeMissingHeaders is case insensitive for existing keys" classname="com.inspiredandroid.kai.mcp.PopularMcpServersTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

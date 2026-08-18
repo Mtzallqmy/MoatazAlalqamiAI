@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" tests="41" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:12.849Z" hostname="db71298c03d4" time="0.023">
+  <properties/>
+  <testcase name="CHAT_REMOTE includes Your Memories when general memories present" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.002"/>
+  <testcase name="CHAT_LOCAL includes memory instructions when provided" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="CHAT_LOCAL omits Interactive UI Mode even when uiMode is INTERACTIVE_UI" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="golden CHAT_REMOTE with everything deactivated is soul + honesty + when-to-act + context" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="CHAT_LOCAL omits Scheduled Tasks regardless of input" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="CHAT_REMOTE includes User Preferences when preference memories present" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.001"/>
+  <testcase name="CHAT_REMOTE includes memory instructions when provided" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="CHAT_REMOTE includes Learnings with reinforcement counts" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="CHAT_LOCAL omits Heartbeat Additions regardless of input" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="CHAT_LOCAL omits Automation section" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="When to Act section is composed into both variants" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.001"/>
+  <testcase name="golden CHAT_LOCAL with soul + memory instructions + context" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="CHAT_REMOTE omits UI sections when uiMode is NONE" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="CHAT_REMOTE includes Interactive UI Mode section when uiMode is INTERACTIVE_UI" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.001"/>
+  <testcase name="CHAT_REMOTE omits Email Accounts when list is empty" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="CHAT_REMOTE Email Accounts surfaces sync failures via lastError" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="golden CHAT_REMOTE with every section enabled" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.004"/>
+  <testcase name="CHAT_REMOTE default emits soul + Structured Learning + Automation + context" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.001"/>
+  <testcase name="CHAT_LOCAL omits Dynamic UI even when uiMode is DYNAMIC_UI" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="honesty rule is composed into both variants" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.001"/>
+  <testcase name="CHAT_REMOTE omits Structured Learning when memory is disabled" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="CHAT_REMOTE includes Dynamic UI section when uiMode is DYNAMIC_UI" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="CHAT_REMOTE includes Heartbeat Additions when list non-empty" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="active skill section is absent by default and present when activated" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.001"/>
+  <testcase name="CHAT_LOCAL omits Structured Learning section even with memory instructions" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="CHAT_REMOTE Email Accounts still render when scheduling is disabled" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.004"/>
+  <testcase name="active skill section lists bundled files with sandbox path" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.001"/>
+  <testcase name="Tool Use section is omitted when no tools are available" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="CHAT_REMOTE omits Automation when scheduling is disabled" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="CHAT_LOCAL omits Email Accounts regardless of input" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="CHAT_LOCAL truncates memories at entry boundary when over budget" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.003"/>
+  <testcase name="CHAT_LOCAL drops lower-priority categories when earlier ones exhaust budget" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="CHAT_REMOTE includes Known Issues section when error memories present" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="Tool Use section is composed into both variants" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="CHAT_REMOTE Automation section names schedule_task as the future-execution mechanism" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.001"/>
+  <testcase name="CHAT_LOCAL default emits only soul + context" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="CHAT_REMOTE omits Scheduled Tasks when list is empty" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="CHAT_LOCAL includes memory category sections when within budget" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="CHAT_REMOTE includes Scheduled Tasks with cron annotation" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <testcase name="CHAT_REMOTE omits Heartbeat Additions when list is empty" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.001"/>
+  <testcase name="CHAT_REMOTE includes Email Accounts when list non-empty" classname="com.inspiredandroid.kai.data.ChatSystemPromptBuilderTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

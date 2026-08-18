@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.data.ModelCatalogTest" tests="16" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:13.039Z" hostname="db71298c03d4" time="0.013">
+  <properties/>
+  <testcase name="minimax M2 series is 204800 not 1M" classname="com.inspiredandroid.kai.data.ModelCatalogTest" time="0.006"/>
+  <testcase name="kimi k2 thinking and 0905 are 256k-class" classname="com.inspiredandroid.kai.data.ModelCatalogTest" time="0.001"/>
+  <testcase name="grok 4_20 is 2M and grok 4_3 is 1M" classname="com.inspiredandroid.kai.data.ModelCatalogTest" time="0.0"/>
+  <testcase name="qwen3_5 open weights are 256k-class" classname="com.inspiredandroid.kai.data.ModelCatalogTest" time="0.0"/>
+  <testcase name="audio models keep zero context window" classname="com.inspiredandroid.kai.data.ModelCatalogTest" time="0.0"/>
+  <testcase name="minimax M3 is 1M and M2-her is 64K" classname="com.inspiredandroid.kai.data.ModelCatalogTest" time="0.0"/>
+  <testcase name="claude 1M models" classname="com.inspiredandroid.kai.data.ModelCatalogTest" time="0.001"/>
+  <testcase name="qwen plus flash max cloud models are 1M" classname="com.inspiredandroid.kai.data.ModelCatalogTest" time="0.0"/>
+  <testcase name="gpt-5_4 and gpt-5_5 are 1_05M API context" classname="com.inspiredandroid.kai.data.ModelCatalogTest" time="0.0"/>
+  <testcase name="gemma 4 and gemma 3 27b are 256k-class" classname="com.inspiredandroid.kai.data.ModelCatalogTest" time="0.0"/>
+  <testcase name="mistral large 3 and medium 3_5 are 256k-class" classname="com.inspiredandroid.kai.data.ModelCatalogTest" time="0.0"/>
+  <testcase name="estimateContextWindow falls back for unknown ids" classname="com.inspiredandroid.kai.data.ModelCatalogTest" time="0.003"/>
+  <testcase name="arena scores attach attested text-leaderboard Elo" classname="com.inspiredandroid.kai.data.ModelCatalogTest" time="0.001"/>
+  <testcase name="gemini pro models are 1M not 2M" classname="com.inspiredandroid.kai.data.ModelCatalogTest" time="0.0"/>
+  <testcase name="claude 200k models including Sonnet 4_5 default" classname="com.inspiredandroid.kai.data.ModelCatalogTest" time="0.001"/>
+  <testcase name="gpt-5_4 mini nano and earlier gpt-5 keep 400k" classname="com.inspiredandroid.kai.data.ModelCatalogTest" time="0.0"/>
+  <system-out><![CDATA[ModelCatalog miss: "totally-unknown-model-xyz" (raw: "totally-unknown-model-xyz")
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

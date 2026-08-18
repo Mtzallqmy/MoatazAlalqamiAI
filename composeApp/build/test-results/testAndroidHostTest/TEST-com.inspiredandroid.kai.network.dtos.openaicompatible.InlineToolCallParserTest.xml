@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.network.dtos.openaicompatible.InlineToolCallParserTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:27.740Z" hostname="db71298c03d4" time="0.004">
+  <properties/>
+  <testcase name="parses json flavor with arguments field" classname="com.inspiredandroid.kai.network.dtos.openaicompatible.InlineToolCallParserTest" time="0.002"/>
+  <testcase name="unknown tool falls back to string parameters" classname="com.inspiredandroid.kai.network.dtos.openaicompatible.InlineToolCallParserTest" time="0.001"/>
+  <testcase name="passes through text without any tool_call" classname="com.inspiredandroid.kai.network.dtos.openaicompatible.InlineToolCallParserTest" time="0.0"/>
+  <testcase name="handles multiple inline tool calls in one message" classname="com.inspiredandroid.kai.network.dtos.openaicompatible.InlineToolCallParserTest" time="0.0"/>
+  <testcase name="parses hermes style xml block and coerces integer timeout" classname="com.inspiredandroid.kai.network.dtos.openaicompatible.InlineToolCallParserTest" time="0.001"/>
+  <testcase name="keeps unparseable block in cleaned text rather than dropping it" classname="com.inspiredandroid.kai.network.dtos.openaicompatible.InlineToolCallParserTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

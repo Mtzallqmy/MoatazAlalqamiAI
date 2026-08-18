@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.data.HeartbeatPromptBuilderTest" tests="20" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:13.030Z" hostname="db71298c03d4" time="0.007">
+  <properties/>
+  <testcase name="includes Promotion Candidates with hit count and category" classname="com.inspiredandroid.kai.data.HeartbeatPromptBuilderTest" time="0.001"/>
+  <testcase name="omits Email Status when no accounts" classname="com.inspiredandroid.kai.data.HeartbeatPromptBuilderTest" time="0.0"/>
+  <testcase name="includes Pending Tasks without cron annotation for one-shot tasks" classname="com.inspiredandroid.kai.data.HeartbeatPromptBuilderTest" time="0.0"/>
+  <testcase name="includes Email Status line per account with unread count" classname="com.inspiredandroid.kai.data.HeartbeatPromptBuilderTest" time="0.0"/>
+  <testcase name="omits Previous Heartbeat Results when empty" classname="com.inspiredandroid.kai.data.HeartbeatPromptBuilderTest" time="0.001"/>
+  <testcase name="includes New Emails with subject from account and preview" classname="com.inspiredandroid.kai.data.HeartbeatPromptBuilderTest" time="0.0"/>
+  <testcase name="includes Previous Heartbeat Results when recentResponses non-empty" classname="com.inspiredandroid.kai.data.HeartbeatPromptBuilderTest" time="0.0"/>
+  <testcase name="New SMS renders placeholder for blank sender and omits empty preview" classname="com.inspiredandroid.kai.data.HeartbeatPromptBuilderTest" time="0.001"/>
+  <testcase name="includes Heartbeat Additions when list non-empty" classname="com.inspiredandroid.kai.data.HeartbeatPromptBuilderTest" time="0.001"/>
+  <testcase name="omits New SMS when empty" classname="com.inspiredandroid.kai.data.HeartbeatPromptBuilderTest" time="0.0"/>
+  <testcase name="omits Heartbeat Additions when list is empty" classname="com.inspiredandroid.kai.data.HeartbeatPromptBuilderTest" time="0.0"/>
+  <testcase name="golden full heartbeat prompt with every section" classname="com.inspiredandroid.kai.data.HeartbeatPromptBuilderTest" time="0.0"/>
+  <testcase name="includes Pending Tasks with cron annotation when task has cron" classname="com.inspiredandroid.kai.data.HeartbeatPromptBuilderTest" time="0.001"/>
+  <testcase name="Email Status omits last sync suffix when lastSync is zero" classname="com.inspiredandroid.kai.data.HeartbeatPromptBuilderTest" time="0.0"/>
+  <testcase name="includes New SMS with sender and preview" classname="com.inspiredandroid.kai.data.HeartbeatPromptBuilderTest" time="0.0"/>
+  <testcase name="omits Pending Tasks when empty" classname="com.inspiredandroid.kai.data.HeartbeatPromptBuilderTest" time="0.0"/>
+  <testcase name="omits Promotion Candidates when empty" classname="com.inspiredandroid.kai.data.HeartbeatPromptBuilderTest" time="0.0"/>
+  <testcase name="default emits only the opening prompt and a trailing newline" classname="com.inspiredandroid.kai.data.HeartbeatPromptBuilderTest" time="0.001"/>
+  <testcase name="New Emails renders placeholder for blank subject and omits empty preview" classname="com.inspiredandroid.kai.data.HeartbeatPromptBuilderTest" time="0.0"/>
+  <testcase name="omits New Emails when empty" classname="com.inspiredandroid.kai.data.HeartbeatPromptBuilderTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

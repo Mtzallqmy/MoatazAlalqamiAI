@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.linux.ApkPackageManagerTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:27.548Z" hostname="db71298c03d4" time="0.007">
+  <properties/>
+  <testcase name="drops apk warning and error lines" classname="com.inspiredandroid.kai.linux.ApkPackageManagerTest" time="0.005"/>
+  <testcase name="commands single-quote the package name" classname="com.inspiredandroid.kai.linux.ApkPackageManagerTest" time="0.0"/>
+  <testcase name="keeps hyphen-digit segments that belong to the package name" classname="com.inspiredandroid.kai.linux.ApkPackageManagerTest" time="0.0"/>
+  <testcase name="counts one upgrade per progress line" classname="com.inspiredandroid.kai.linux.ApkPackageManagerTest" time="0.0"/>
+  <testcase name="only the ERROR prefix counts as a failure" classname="com.inspiredandroid.kai.linux.ApkPackageManagerTest" time="0.0"/>
+  <testcase name="search output splits description off the name-version" classname="com.inspiredandroid.kai.linux.ApkPackageManagerTest" time="0.001"/>
+  <testcase name="parses apk info -v output into name and version" classname="com.inspiredandroid.kai.linux.ApkPackageManagerTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

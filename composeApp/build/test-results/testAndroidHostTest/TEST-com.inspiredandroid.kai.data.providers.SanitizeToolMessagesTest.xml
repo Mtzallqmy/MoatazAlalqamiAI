@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.data.providers.SanitizeToolMessagesTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:13.192Z" hostname="db71298c03d4" time="0.002">
+  <properties/>
+  <testcase name="assistant tool_calls with neither responses nor text is dropped entirely" classname="com.inspiredandroid.kai.data.providers.SanitizeToolMessagesTest" time="0.0"/>
+  <testcase name="tool_call whose name is in declaredToolNames is preserved" classname="com.inspiredandroid.kai.data.providers.SanitizeToolMessagesTest" time="0.0"/>
+  <testcase name="tool_call to a tool not in declaredToolNames is dropped along with its response" classname="com.inspiredandroid.kai.data.providers.SanitizeToolMessagesTest" time="0.001"/>
+  <testcase name="balanced sequence is left unchanged" classname="com.inspiredandroid.kai.data.providers.SanitizeToolMessagesTest" time="0.0"/>
+  <testcase name="leading orphan tools from trimming are dropped while later turns survive" classname="com.inspiredandroid.kai.data.providers.SanitizeToolMessagesTest" time="0.0"/>
+  <testcase name="tool response with null id is dropped as an orphan" classname="com.inspiredandroid.kai.data.providers.SanitizeToolMessagesTest" time="0.0"/>
+  <testcase name="null declaredToolNames preserves historic tool_calls regardless of name" classname="com.inspiredandroid.kai.data.providers.SanitizeToolMessagesTest" time="0.0"/>
+  <testcase name="empty declaredToolNames strips every historic tool_call" classname="com.inspiredandroid.kai.data.providers.SanitizeToolMessagesTest" time="0.0"/>
+  <testcase name="orphan tool message without preceding tool_calls is dropped" classname="com.inspiredandroid.kai.data.providers.SanitizeToolMessagesTest" time="0.0"/>
+  <testcase name="partial responses keep only the answered calls" classname="com.inspiredandroid.kai.data.providers.SanitizeToolMessagesTest" time="0.0"/>
+  <testcase name="assistant tool_calls with no responses keeps text and drops the calls" classname="com.inspiredandroid.kai.data.providers.SanitizeToolMessagesTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

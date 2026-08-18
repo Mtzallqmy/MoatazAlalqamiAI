@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.ui.markdown.BlockParsingTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:28.357Z" hostname="db71298c03d4" time="0.005">
+  <properties/>
+  <testcase name="multiple paragraphs separated by blank line" classname="com.inspiredandroid.kai.ui.markdown.BlockParsingTest" time="0.0"/>
+  <testcase name="blockquote multiple lines" classname="com.inspiredandroid.kai.ui.markdown.BlockParsingTest" time="0.001"/>
+  <testcase name="blockquote single line" classname="com.inspiredandroid.kai.ui.markdown.BlockParsingTest" time="0.0"/>
+  <testcase name="loose list via blank line between items" classname="com.inspiredandroid.kai.ui.markdown.BlockParsingTest" time="0.0"/>
+  <testcase name="tilde fence is supported" classname="com.inspiredandroid.kai.ui.markdown.BlockParsingTest" time="0.0"/>
+  <testcase name="atx heading allows trailing hashes" classname="com.inspiredandroid.kai.ui.markdown.BlockParsingTest" time="0.001"/>
+  <testcase name="ordered list starting at 5" classname="com.inspiredandroid.kai.ui.markdown.BlockParsingTest" time="0.0"/>
+  <testcase name="unclosed fenced code is rendered with closed=false" classname="com.inspiredandroid.kai.ui.markdown.BlockParsingTest" time="0.0"/>
+  <testcase name="fenced code block with language" classname="com.inspiredandroid.kai.ui.markdown.BlockParsingTest" time="0.0"/>
+  <testcase name="paragraph ends at heading opener" classname="com.inspiredandroid.kai.ui.markdown.BlockParsingTest" time="0.0"/>
+  <testcase name="simple table with alignment" classname="com.inspiredandroid.kai.ui.markdown.BlockParsingTest" time="0.001"/>
+  <testcase name="setext h1 and h2" classname="com.inspiredandroid.kai.ui.markdown.BlockParsingTest" time="0.0"/>
+  <testcase name="nested bullet list" classname="com.inspiredandroid.kai.ui.markdown.BlockParsingTest" time="0.001"/>
+  <testcase name="atx headings h1 through h6" classname="com.inspiredandroid.kai.ui.markdown.BlockParsingTest" time="0.0"/>
+  <testcase name="table without outer pipes" classname="com.inspiredandroid.kai.ui.markdown.BlockParsingTest" time="0.0"/>
+  <testcase name="horizontal rules" classname="com.inspiredandroid.kai.ui.markdown.BlockParsingTest" time="0.0"/>
+  <testcase name="fenced code block with no language" classname="com.inspiredandroid.kai.ui.markdown.BlockParsingTest" time="0.001"/>
+  <testcase name="bullet list with dash" classname="com.inspiredandroid.kai.ui.markdown.BlockParsingTest" time="0.0"/>
+  <testcase name="empty input produces empty document" classname="com.inspiredandroid.kai.ui.markdown.BlockParsingTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

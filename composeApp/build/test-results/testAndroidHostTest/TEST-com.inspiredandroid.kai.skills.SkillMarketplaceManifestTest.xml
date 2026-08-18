@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.skills.SkillMarketplaceManifestTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:27.895Z" hostname="db71298c03d4" time="0.001">
+  <properties/>
+  <testcase name="de-duplicates repeated paths" classname="com.inspiredandroid.kai.skills.SkillMarketplaceManifestTest" time="0.0"/>
+  <testcase name="tolerates absent source as same-repo" classname="com.inspiredandroid.kai.skills.SkillMarketplaceManifestTest" time="0.0"/>
+  <testcase name="allowlist takes precedence and keeps only folders with a SKILL_md" classname="com.inspiredandroid.kai.skills.SkillMarketplaceManifestTest" time="0.001"/>
+  <testcase name="skips plugins sourced from a different repo" classname="com.inspiredandroid.kai.skills.SkillMarketplaceManifestTest" time="0.0"/>
+  <testcase name="folder scrape finds direct children under root only" classname="com.inspiredandroid.kai.skills.SkillMarketplaceManifestTest" time="0.0"/>
+  <testcase name="exclude drops skills by folder name" classname="com.inspiredandroid.kai.skills.SkillMarketplaceManifestTest" time="0.0"/>
+  <testcase name="returns empty on missing plugins or malformed json" classname="com.inspiredandroid.kai.skills.SkillMarketplaceManifestTest" time="0.0"/>
+  <testcase name="flattens and normalizes skill paths across plugins" classname="com.inspiredandroid.kai.skills.SkillMarketplaceManifestTest" time="0.0"/>
+  <testcase name="manifest used when no allowlist" classname="com.inspiredandroid.kai.skills.SkillMarketplaceManifestTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

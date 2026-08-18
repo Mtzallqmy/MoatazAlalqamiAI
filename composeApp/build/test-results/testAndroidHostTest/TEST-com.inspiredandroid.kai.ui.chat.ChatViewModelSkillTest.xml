@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.ui.chat.ChatViewModelSkillTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:28.174Z" hostname="db71298c03d4" time="0.006">
+  <properties/>
+  <testcase name="leading slash command routes the matching skill id and keeps text verbatim" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelSkillTest" time="0.002"/>
+  <testcase name="unmatched slash command passes no skill id" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelSkillTest" time="0.002"/>
+  <testcase name="plain message passes no skill id" classname="com.inspiredandroid.kai.ui.chat.ChatViewModelSkillTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

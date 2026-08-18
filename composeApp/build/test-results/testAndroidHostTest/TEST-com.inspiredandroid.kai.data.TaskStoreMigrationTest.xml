@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.data.TaskStoreMigrationTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:13.158Z" hostname="db71298c03d4" time="0.009">
+  <properties/>
+  <testcase name="addTask with on_heartbeat trigger excludes from getDueTasks and scheduled tasks" classname="com.inspiredandroid.kai.data.TaskStoreMigrationTest" time="0.003"/>
+  <testcase name="legacy cron task without trigger field upgrades to CRON" classname="com.inspiredandroid.kai.data.TaskStoreMigrationTest" time="0.002"/>
+  <testcase name="legacy one-shot task without trigger field stays TIME" classname="com.inspiredandroid.kai.data.TaskStoreMigrationTest" time="0.001"/>
+  <testcase name="legacy cron migration persists so later loads don't rewrite" classname="com.inspiredandroid.kai.data.TaskStoreMigrationTest" time="0.002"/>
+  <testcase name="legacy task without recentExecutions field decodes to empty list" classname="com.inspiredandroid.kai.data.TaskStoreMigrationTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

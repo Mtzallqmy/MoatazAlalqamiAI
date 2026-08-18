@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.tools.SchedulingToolsTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:27.915Z" hostname="db71298c03d4" time="0.049">
+  <properties/>
+  <testcase name="naive future local datetime succeeds" classname="com.inspiredandroid.kai.tools.SchedulingToolsTest" time="0.041"/>
+  <testcase name="past naive datetime is rejected with guidance message" classname="com.inspiredandroid.kai.tools.SchedulingToolsTest" time="0.002"/>
+  <testcase name="malformed execute_at returns Invalid execute_at format error" classname="com.inspiredandroid.kai.tools.SchedulingToolsTest" time="0.001"/>
+  <testcase name="offset-qualified future instant succeeds" classname="com.inspiredandroid.kai.tools.SchedulingToolsTest" time="0.001"/>
+  <testcase name="tool description mentions local timezone handling" classname="com.inspiredandroid.kai.tools.SchedulingToolsTest" time="0.0"/>
+  <testcase name="past offset-qualified instant is rejected" classname="com.inspiredandroid.kai.tools.SchedulingToolsTest" time="0.002"/>
+  <testcase name="past-instant rejection does not persist the task" classname="com.inspiredandroid.kai.tools.SchedulingToolsTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

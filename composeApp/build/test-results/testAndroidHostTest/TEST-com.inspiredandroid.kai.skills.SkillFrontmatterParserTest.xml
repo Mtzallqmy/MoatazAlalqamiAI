@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.skills.SkillFrontmatterParserTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:27.748Z" hostname="db71298c03d4" time="0.008">
+  <properties/>
+  <testcase name="ignores unknown frontmatter keys" classname="com.inspiredandroid.kai.skills.SkillFrontmatterParserTest" time="0.005"/>
+  <testcase name="rejects overlong id" classname="com.inspiredandroid.kai.skills.SkillFrontmatterParserTest" time="0.002"/>
+  <testcase name="rejects missing description" classname="com.inspiredandroid.kai.skills.SkillFrontmatterParserTest" time="0.0"/>
+  <testcase name="rejects invalid id characters" classname="com.inspiredandroid.kai.skills.SkillFrontmatterParserTest" time="0.0"/>
+  <testcase name="tolerates CRLF and quoted values" classname="com.inspiredandroid.kai.skills.SkillFrontmatterParserTest" time="0.001"/>
+  <testcase name="rejects missing frontmatter" classname="com.inspiredandroid.kai.skills.SkillFrontmatterParserTest" time="0.0"/>
+  <testcase name="parses name description and body" classname="com.inspiredandroid.kai.skills.SkillFrontmatterParserTest" time="0.0"/>
+  <testcase name="rejects unclosed frontmatter" classname="com.inspiredandroid.kai.skills.SkillFrontmatterParserTest" time="0.0"/>
+  <testcase name="displayName titlecases hyphenated id" classname="com.inspiredandroid.kai.skills.SkillFrontmatterParserTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

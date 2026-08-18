@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.inspiredandroid.kai.ui.chat.ToGroqMessageDtoReasoningTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:28.257Z" hostname="db71298c03d4" time="0.001">
+  <properties/>
+  <testcase name="default mode is NONE" classname="com.inspiredandroid.kai.ui.chat.ToGroqMessageDtoReasoningTest" time="0.001"/>
+  <testcase name="REASONING_CONTENT mode preserves reasoning_content on assistant tool-call message" classname="com.inspiredandroid.kai.ui.chat.ToGroqMessageDtoReasoningTest" time="0.0"/>
+  <testcase name="NONE mode strips reasoning_content from assistant tool-call message" classname="com.inspiredandroid.kai.ui.chat.ToGroqMessageDtoReasoningTest" time="0.0"/>
+  <testcase name="non-tool-call assistant messages never carry reasoning_content regardless of mode" classname="com.inspiredandroid.kai.ui.chat.ToGroqMessageDtoReasoningTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
