@@ -8,6 +8,7 @@ import java.io.IOException
 import java.util.Base64
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.delay
 
 /** Install logs are worth keeping in full; the shell tool's 15k cap is not enough. */
 private const val MAX_OUTPUT_CHARS = 200_000
@@ -29,6 +30,39 @@ class BuildProotExecutor(
     /** File name (inside the bind-mounted tmp dir) the PTY bridge records its pid in. */
     private val pidFileName: String = "kai-pid",
 ) {
+
+    /**
+     * Try a list of commands (primary + mirrors) with retry and backoff.
+     * Each command is attempted up to [maxAttempts] times; on failure the next
+     * entry in the list is tried until one succeeds or all are exhausted.
+     * Returns the result of the last attempt.
+     *
+     * Mirrors are plain download URLs (no `| bash`): the runner pipes each into
+     * bash only when that URL is about to run, so a broken mirror cannot execute
+     * arbitrary code without the user explicitly selecting it.
+     */
+    suspend fun executeWithRetry(
+        commands: List<String>,
+        timeoutSeconds: Long = 900,
+        maxAttempts: Int = 2,
+        workingDir: String = "/root",
+    ): ProotResult {
+        // Normalize: keep the primary line as-is (it already contains `| bash`),
+        // but append `| bash` to fallback mirror URLs.
+        val prepared = commands.mapIndexed { index, cmd ->
+            if (index == 0) cmd else cmd.trimEnd() + " | bash"
+        }
+        var last: ProotResult = ProotResult(success = false, error = "No commands provided")
+        for (command in prepared) {
+            for (attempt in 0 until maxAttempts) {
+                if (attempt > 0) delay(2_000L * attempt)
+                val result = execute(command, timeoutSeconds, workingDir)
+                if (result.success) return result
+                last = result
+            }
+        }
+        return last
+    }
 
     fun execute(
         command: String,

@@ -84,23 +84,52 @@ internal fun BuildSetupContent(
                 modifier = Modifier.padding(bottom = 8.dp),
             )
             BuildAgents.all.forEach { agent ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(enabled = installing == null) { onToggleAgent(agent.id) }
-                        .handCursor(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Checkbox(
-                        checked = agent.id in selectedAgents || agent.id in state.installedAgents,
-                        onCheckedChange = { onToggleAgent(agent.id) },
-                        enabled = installing == null && agent.id !in state.installedAgents,
-                    )
-                    Text(
-                        text = agent.title,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
+                val isAutoInstall = agent.autoInstall
+                val alreadyPicked = agent.id in selectedAgents || agent.id in state.installedAgents
+                if (isAutoInstall) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .handCursor(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(
+                            checked = alreadyPicked,
+                            onCheckedChange = null,
+                            enabled = false,
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "${agent.title}  (تلقائي)",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = "يُثبَّت تلقائياً مع النظام بعد تنزيل Debian",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                        }
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = installing == null) { onToggleAgent(agent.id) }
+                            .handCursor(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(
+                            checked = alreadyPicked,
+                            onCheckedChange = { onToggleAgent(agent.id) },
+                            enabled = installing == null && agent.id !in state.installedAgents,
+                        )
+                        Text(
+                            text = agent.title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
             }
         }

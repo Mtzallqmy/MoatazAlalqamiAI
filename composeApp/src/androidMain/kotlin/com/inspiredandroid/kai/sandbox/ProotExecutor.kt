@@ -6,6 +6,7 @@ import java.io.BufferedReader
 import java.io.IOException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.delay
 
 private const val MAX_OUTPUT_LENGTH = 15_000
 private const val DEFAULT_TIMEOUT_SECONDS = 30L
@@ -19,6 +20,31 @@ private const val MAX_TIMEOUT_SECONDS = 180L
  * the shared [ProotLauncher], which Kai Build's PTY executor uses too.
  */
 class ProotExecutor(private val launcher: ProotLauncher) {
+
+    /**
+     * Try a list of commands (primary + mirrors) with retry and backoff.
+     * Each command is attempted up to [maxAttempts] times; on failure the next
+     * entry in the list is tried until one succeeds or all are exhausted.
+     * Returns the result of the last attempt.
+     */
+    suspend fun executeWithRetry(
+        commands: List<String>,
+        timeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS,
+        maxAttempts: Int = 2,
+        workingDir: String = "/root",
+        extraEnv: Map<String, String> = emptyMap(),
+    ): Map<String, Any> {
+        var lastResult: Map<String, Any> = mapOf("success" to false, "error" to "No commands provided")
+        for (command in commands) {
+            for (attempt in 0 until maxAttempts) {
+                if (attempt > 0) delay(2_000L * attempt)
+                val result = execute(command, timeoutSeconds, workingDir, extraEnv)
+                if ((result["success"] as? Boolean) == true) return result
+                lastResult = result
+            }
+        }
+        return lastResult
+    }
 
     fun execute(
         command: String,

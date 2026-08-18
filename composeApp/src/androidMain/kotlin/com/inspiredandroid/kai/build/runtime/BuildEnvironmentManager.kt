@@ -573,8 +573,12 @@ class BuildEnvironmentManager(
             onEnvironmentChanged?.invoke()
         }
 
+        // Auto-install agents (OpenCode) are always installed right after Debian,
+        // so the user never has to tick them — they are part of the fresh system.
+        val autoIds = BuildAgents.autoInstallAgents.map { it.id }.toSet()
+        val allAgentIds = (agentIds + autoIds).mapNotNull { BuildAgents.get(it) }
         val failed = mutableListOf<String>()
-        for (agent in agentIds.mapNotNull { BuildAgents.get(it) }) {
+        for (agent in allAgentIds) {
             if (!isActive()) throw CancellationException()
             if (!installAgent(agent)) failed += agent.title
         }
@@ -601,7 +605,12 @@ class BuildEnvironmentManager(
                 "/root/.opencode/bin /root/.claude/downloads /usr/local/bin",
             timeoutSeconds = 30,
         )
-        val result = executor.execute(agent.installCommand, timeoutSeconds = 900)
+
+        // Primary URL first; when it fails, fall back to mirrors in order.
+        // Each fallback is tried with a backoff so a flaky mobile connection gets
+        // a second chance before giving up on that mirror.
+        val urls = listOf(agent.installCommand) + agent.fallbackUrls
+        val result = executor.executeWithRetry(urls, timeoutSeconds = 900, maxAttempts = 2)
         // Vendor scripts may leave the binary only in their private dir and only
         // update shell rc files — which Kai Build never sources. Link into PATH
         // and re-probe so a successful download still counts as installed.
