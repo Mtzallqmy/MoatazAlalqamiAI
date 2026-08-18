@@ -175,6 +175,11 @@ class AppSettings(internal val settings: Settings) {
         null
     }
 
+    /** Erases a legacy plaintext key after it has been migrated into the vault. */
+    fun removeLegacyString(legacyKey: String) {
+        runCatching { settings.remove(legacyKey) }
+    }
+
     // App open tracking
     fun trackAppOpen(): Int {
         val currentCount = settings.getInt(KEY_APP_OPENS, 0)

@@ -25,6 +25,8 @@ class SecretStoreMigrator(
     suspend fun migrate(
         legacyKeys: List<String>,
         readLegacy: LegacyValueProvider,
+        /** Optional cleaner invoked after a key has been safely stored in the vault. */
+        eraseLegacy: (legacyKey: String) -> Unit = {},
     ): Int {
         var migrated = 0
         for (legacyKey in legacyKeys) {
@@ -36,6 +38,9 @@ class SecretStoreMigrator(
                 continue
             }
             secretStore.put(legacyKey, value)
+            // A secret must live in exactly one place: erase the legacy
+            // plaintext copy once it has been safely stored in the vault.
+            runCatching { eraseLegacy(legacyKey) }
             writeSecretMarker(marker)
             migrated++
         }

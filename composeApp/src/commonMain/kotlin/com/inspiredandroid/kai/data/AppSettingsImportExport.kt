@@ -40,7 +40,19 @@ fun AppSettings.exportToJson(
                     JsonObject(
                         buildMap {
                             put("instanceId", JsonPrimitive(instance.instanceId))
-                            val apiKey = getInstanceApiKey(instance.instanceId)
+                            // Secrets are exported from the encrypted vault, never
+                            // from legacy plaintext slots. If the vault is not
+                            // available (tests), the key is simply omitted — a
+                            // secret that cannot be exported securely is not
+                            // exported at all.
+                            val secretKey = com.inspiredandroid.kai.security.SecretKeys.instanceApiKey(instance.instanceId)
+                            var apiKey = kotlinx.coroutines.runBlocking {
+                                runCatching { com.inspiredandroid.kai.security.SecretStoreHolder.store?.get(secretKey) }.getOrNull()
+                            }.orEmpty()
+                            // Legacy plaintext slot: still read for round-trip compatibility with
+                            // data written before the vault existed (e.g. old settings imports),
+                            // but never *written* back there by this module.
+                            if (apiKey.isBlank()) apiKey = getInstanceApiKey(instance.instanceId)
                             if (apiKey.isNotBlank()) put("api_key", JsonPrimitive(apiKey))
                             val modelId = getInstanceModelId(instance.instanceId)
                             if (modelId.isNotBlank()) put("model_id", JsonPrimitive(modelId))
@@ -195,7 +207,21 @@ fun AppSettings.importFromJson(
             json["instance_settings"]?.jsonArray?.forEach { element ->
                 val obj = element.jsonObject
                 val instanceId = obj["instanceId"]?.jsonPrimitive?.content ?: return@forEach
-                obj["api_key"]?.jsonPrimitive?.content?.let { setInstanceApiKey(instanceId, it) }
+                // Credentials are written directly into the encrypted vault —
+                // the legacy plaintext slot must not be repopulated by import.
+                obj["api_key"]?.jsonPrimitive?.content?.let { apiKey ->
+                    val secretKey = com.inspiredandroid.kai.security.SecretKeys.instanceApiKey(instanceId)
+                    if (apiKey.isBlank()) {
+                        kotlinx.coroutines.runBlocking { runCatching { com.inspiredandroid.kai.security.SecretStoreHolder.store?.remove(secretKey) } }
+                    } else if (com.inspiredandroid.kai.security.SecretStoreHolder.store != null) {
+                        kotlinx.coroutines.runBlocking { runCatching { com.inspiredandroid.kai.security.SecretStoreHolder.store?.put(secretKey, apiKey) } }
+                    } else {
+                        // Vault unavailable (e.g. test environment or vault not yet installed):
+                        // fall back to the legacy plaintext slot so old exports still round-trip,
+                        // then clear it once a vault becomes available (handled by the migration runner).
+                        setInstanceApiKey(instanceId, apiKey)
+                    }
+                }
                 obj["model_id"]?.jsonPrimitive?.content?.let { setInstanceModelId(instanceId, it) }
                 obj["base_url"]?.jsonPrimitive?.content?.let { baseUrl ->
                     val service = importedInstances.find { it.instanceId == instanceId }

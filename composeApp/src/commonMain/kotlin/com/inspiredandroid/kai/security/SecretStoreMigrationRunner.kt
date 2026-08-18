@@ -67,6 +67,9 @@ class SecretStoreMigrationRunner(
             return
         }
         secretStore.put(legacyKey, plaintext)
+        // A secret must live in exactly one place: erase the legacy plaintext
+        // copy once it has been safely stored in the encrypted vault.
+        runCatching { appSettings.removeLegacyString(legacyKey) }
         markers.markMigrated(legacyKey)
     }
 }
