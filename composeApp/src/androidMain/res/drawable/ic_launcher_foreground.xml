@@ -3,15 +3,14 @@
     android:height="108dp"
     android:viewportWidth="90"
     android:viewportHeight="90">
-  <group android:scaleX="0.59"
-      android:scaleY="0.59"
-      android:translateX="18.45"
-      android:translateY="18.45">
+  <!-- Moataz Alalqami AI foreground: geometric "M" monogram, centered for adaptive icon safe zone -->
+  <group android:translateX="27"
+      android:translateY="27">
     <path
-        android:pathData="M35,45m-30,0a30,30 0,1 1,60 0a30,30 0,1 1,-60 0"
-        android:fillColor="#6200ee"/>
+        android:pathData="M6,66 L6,18 L27,52 L48,18 L48,66 L40,66 L40,34.5 L27,56 L14,34.5 L14,66 Z"
+        android:fillColor="#B794F6"/>
     <path
-        android:pathData="M55,45m-30,0a30,30 0,1 1,60 0a30,30 0,1 1,-60 0"
-        android:fillColor="#8063C5"/>
+        android:pathData="M27,60 L10,30 L10,24 L27,54 L44,24 L44,30 Z"
+        android:fillColor="#6200EE"/>
   </group>
 </vector>

@@ -86,7 +86,7 @@ object FetchUrlTool : Tool {
         return try {
             val response = client.request(urlArg) {
                 method = HttpMethod.parse(methodArg)
-                header("User-Agent", "Mozilla/5.0 (compatible; Kai/1.0)")
+                header("User-Agent", "Mozilla/5.0 (compatible; MA-AI/1.0)")
                 if (bodyArg != null && methodArg == "POST") {
                     contentType(
                         contentTypeArg?.let { runCatching { ContentType.parse(it) }.getOrNull() }

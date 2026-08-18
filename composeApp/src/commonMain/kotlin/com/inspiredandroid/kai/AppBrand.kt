@@ -23,13 +23,21 @@ object AppBrand {
     // Localized app name resource (overrides `app_name` string used by Android).
     val nameRes: StringResource = Res.string.brand_app_name
 
-    const val ABOUT_TITLE: String = "Moataz Alalqami AI"
-    const val ABOUT_TAGLINE: String = "Your on-device AI agent workbench"
+    const val ABOUT_TITLE: String = "معتز العلقمي AI"
+    const val ABOUT_TAGLINE: String = "وكيلك الذكي — يعمل على جهازك"
 
     fun aboutText(): String = buildString {
         appendLine("$DISPLAY_NAME")
         appendLine("$ABOUT_TAGLINE\n")
-        appendLine("An Android AI Agent Workbench that combines model providers,")
-        appendLine("an agent runtime, a coding sandbox and project memory in one app.")
+        appendLine("وكيل ذكاء اصطناعي متكامل على أندرويد: مزودو النماذج (OpenAI و Gemini و Anthropic و Open Router وأي API متوافق)،")
+        appendLine("محرّك الوكلاء، طرفية لينكس معزولة، الذاكرة الدلالية وبناء المشاريع — في تطبيق واحد.")
+    }
+
+    fun aboutTextEn(): String = buildString {
+        appendLine("$DISPLAY_NAME")
+        appendLine("Your AI agent — running on your device\n")
+        appendLine("An all-in-one Android AI Agent: model providers (OpenAI, Gemini, Anthropic,")
+        appendLine("Open Router and any OpenAI-compatible API), an agent runtime, an isolated")
+        appendLine("Linux sandbox terminal, semantic memory and project building — in one app.")
     }
 }

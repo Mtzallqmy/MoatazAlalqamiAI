@@ -3,10 +3,11 @@
     android:height="90dp"
     android:viewportWidth="90"
     android:viewportHeight="90">
+  <!-- Moataz Alalqami AI logo: geometric "M" monogram -->
   <path
-      android:pathData="M35,45m-30,0a30,30 0,1 1,60 0a30,30 0,1 1,-60 0"
-      android:fillColor="#6200ee"/>
+      android:pathData="M5,75 L5,25 L27,59 L49,25 L49,75 L41,75 L41,41.5 L27,63 L13,41.5 L13,75 Z"
+      android:fillColor="#B794F6"/>
   <path
-      android:pathData="M55,45m-30,0a30,30 0,1 1,60 0a30,30 0,1 1,-60 0"
-      android:fillColor="#8063C5"/>
+      android:pathData="M27,67 L10,37 L10,31 L27,61 L44,31 L44,37 Z"
+      android:fillColor="#6200EE"/>
 </vector>

@@ -103,7 +103,7 @@ class Requests {
             )
         }
         install(UserAgent) {
-            agent = "Kai/${Version.appVersion} (${currentPlatform.displayName})"
+            agent = "MA-AI/${Version.appVersion} (${currentPlatform.displayName})"
         }
         install(HttpTimeout) {
             requestTimeoutMillis = 180.seconds.inWholeMilliseconds
