@@ -65,6 +65,7 @@ import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -84,6 +85,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import org.jetbrains.compose.resources.getString
+import org.koin.core.component.get
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.time.Clock
@@ -178,6 +180,13 @@ class RemoteDataRepository(
 ) : DataRepository {
 
     private val prettyJson = Json { prettyPrint = true }
+    private val credentialsResolver: com.inspiredandroid.kai.security.ProviderCredentialsResolver by lazy {
+        val koinHelper = object : org.koin.core.component.KoinComponent {}
+        com.inspiredandroid.kai.security.ProviderCredentialsResolver(
+            secretStore = koinHelper.get<com.inspiredandroid.kai.security.SecretStore>(),
+            appSettings = appSettings,
+        )
+    }
 
     /**
      * Returns the tools exposed to the on-device (LiteRT) model. Filtered by name against
@@ -191,9 +200,9 @@ class RemoteDataRepository(
     // Per-instance model storage: instanceId -> models flow
     private val modelsByInstance: MutableMap<String, MutableStateFlow<List<SettingsModel>>> = mutableMapOf()
 
-    /** Build credentials from per-instance settings */
-    private fun instanceCredentials(instanceId: String, service: Service): ServiceCredentials = ServiceCredentials(
-        apiKey = appSettings.getInstanceApiKey(instanceId),
+    /** Build credentials from per-instance settings; API key resolved from the encrypted SecretStore. */
+    private suspend fun instanceCredentials(instanceId: String, service: Service): ServiceCredentials = ServiceCredentials(
+        apiKey = credentialsResolver.resolveInstanceApiKey(instanceId).ifBlank { appSettings.getInstanceApiKey(instanceId) },
         modelId = if (service == Service.Free) {
             appSettings.getFreeMode().modelId
         } else {
@@ -275,6 +284,18 @@ class RemoteDataRepository(
     override fun getInstanceApiKey(instanceId: String): String = appSettings.getInstanceApiKey(instanceId)
 
     override fun updateInstanceApiKey(instanceId: String, apiKey: String) {
+        // Secrets flow exclusively through the encrypted SecretStore; we also keep the
+        // legacy plaintext slot so export/import and the migration stay consistent.
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            val secretKey = com.inspiredandroid.kai.security.SecretKeys.instanceApiKey(instanceId)
+            runCatching {
+                if (apiKey.isBlank()) {
+                    credentialsResolver.secretStore.remove(secretKey)
+                } else {
+                    credentialsResolver.secretStore.put(com.inspiredandroid.kai.security.SecretKeys.instanceApiKey(instanceId), apiKey)
+                }
+            }
+        }
         appSettings.setInstanceApiKey(instanceId, apiKey)
     }
 

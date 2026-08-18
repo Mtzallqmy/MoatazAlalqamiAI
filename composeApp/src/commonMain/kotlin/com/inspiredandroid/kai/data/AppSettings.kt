@@ -167,6 +167,14 @@ data class ServiceInstance(
 
 class AppSettings(internal val settings: Settings) {
 
+    /** Reads a free-form string key — used by the secret-vault migration to
+     *  locate legacy plaintext credentials before they are moved to the vault. */
+    fun getLegacyStringOrNull(legacyKey: String): String? = try {
+        settings.getStringOrNull(legacyKey)
+    } catch (_: Exception) {
+        null
+    }
+
     // App open tracking
     fun trackAppOpen(): Int {
         val currentCount = settings.getInt(KEY_APP_OPENS, 0)
