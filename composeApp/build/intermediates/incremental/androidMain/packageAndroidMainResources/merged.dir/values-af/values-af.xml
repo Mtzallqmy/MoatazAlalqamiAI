@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="daemon_channel_description">Hou Moataz Alalqami AI aan die gang vir geskeduleerde taakuitvoering</string>
-    <string name="daemon_channel_name">Moataz Alalqami AI-daemondiens</string>
-    <string name="daemon_notification_text">Daemon loop tans</string>
-    <string name="download_channel_description">Wys vordering tydens aflaai van KI-modelle</string>
-    <string name="download_channel_name">Modelaflaaie</string>
-    <string name="download_notification_text">Laai model af…</string>
-</resources>

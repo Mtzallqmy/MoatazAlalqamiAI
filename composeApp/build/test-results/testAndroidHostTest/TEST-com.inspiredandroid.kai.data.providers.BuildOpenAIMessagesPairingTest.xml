@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.inspiredandroid.kai.data.providers.BuildOpenAIMessagesPairingTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-08-18T00:35:13.184Z" hostname="db71298c03d4" time="0.006">
-  <properties/>
-  <testcase name="a complete tool turn is preserved intact" classname="com.inspiredandroid.kai.data.providers.BuildOpenAIMessagesPairingTest" time="0.006"/>
-  <testcase name="orphaned assistant tool-call turn from a prior interrupted run is repaired" classname="com.inspiredandroid.kai.data.providers.BuildOpenAIMessagesPairingTest" time="0.0"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>
