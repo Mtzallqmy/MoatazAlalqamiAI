@@ -503,4 +503,10 @@
     <string name="settings_preset_fireworks">Fireworks</string>
     <string name="settings_preset_mistral">Mistral</string>
     <string name="settings_preset_ollama_local">Ollama (محلي)</string>
+    <string name="chat_sandbox_terminal">Sandbox terminal</string>
+    <string name="chat_sandbox_terminal_minimize">Minimize</string>
+    <string name="agents_activity_title">Awaiting your approval</string>
+    <string name="agents_approve">Approve</string>
+    <string name="agents_reject">Reject</string>
+    <string name="agents_no_pending">No pending approvals</string>
 </resources>
