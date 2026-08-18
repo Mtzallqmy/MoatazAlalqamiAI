@@ -148,11 +148,17 @@ class LinuxInstaller(
     )
 
     /**
-     * Alpine's mirrors go down independently of the one that served the rootfs,
-     * so `apk update` walks the list rewriting `repositories` until one answers.
-     * Debian has a single index to refresh.
+     * Refresh the package index. For Debian, if the base packages are already
+     * installed in the rootfs (e.g. from a pre-built image), skip apt update
+     * entirely — it needs internet and would fail when the network is unavailable.
+     * Alpine still walks its mirrors since it can't pre-check.
      */
     private suspend fun refreshPackageIndex(spec: DistroSpec, launcher: ProotLauncher) {
+        // If this is Debian and all base packages are already installed (dpkg
+        // says "install ok installed"), skip apt update — no internet needed.
+        if (spec.distro == LinuxDistro.DEBIAN && basePackagesAlreadyInstalled(launcher, spec.distro)) {
+            return
+        }
         val updateCommand = spec.distro.packageManager.updateCommand
         if (spec !is AlpineSpec) {
             val result = launcher.execute(updateCommand, timeoutSeconds = UPDATE_TIMEOUT_SECONDS)
@@ -171,11 +177,38 @@ class LinuxInstaller(
         error("`$updateCommand` failed on all Alpine mirrors$suffix")
     }
 
+    /**
+     * Checks dpkg status inside the rootfs: if every base package is already
+     * "install ok installed", the rootfs was pre-bootstrapped and apt update
+     * + apt install can be skipped.
+     */
+    private fun basePackagesAlreadyInstalled(launcher: ProotLauncher, distro: LinuxDistro): Boolean {
+        val dpkgStatus = File(paths.rootfsDir, "var/lib/dpkg/status")
+        if (!dpkgStatus.exists()) return false
+        return try {
+            val status = dpkgStatus.readText()
+            distro.basePackages.all { pkg ->
+                status.contains("Package: $pkg") &&
+                    status.substringAfter("Package: $pkg")
+                        .substringBefore("\n\n")
+                        .contains("install ok installed")
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     private suspend fun installBasePackages(
         distro: LinuxDistro,
         launcher: ProotLauncher,
         onStep: (InstallStep) -> Unit,
     ) {
+        // If all base packages are already installed (pre-bootstrapped rootfs),
+        // skip apt install entirely — nothing more to do.
+        if (distro == LinuxDistro.DEBIAN && basePackagesAlreadyInstalled(launcher, distro)) {
+            onStep(InstallStep.Packages(distro.basePackages))
+            return
+        }
         val manager = distro.packageManager
         if (distro == LinuxDistro.ALPINE) {
             // apk resolves one package per call, which also gives per-package progress.
