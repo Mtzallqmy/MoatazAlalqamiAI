@@ -1,6 +1,7 @@
 <resources>
     <string name="brand_app_name">Moataz Alalqami AI</string>
     <string name="brand_about_title">Moataz Alalqami AI</string>
-    <string name="brand_about_tagline">Your on-device AI agent workbench</string>
-    <string name="brand_about_text">Moataz Alalqami AI is an Android AI Agent Workbench that combines model providers, an agent runtime, a coding sandbox and project memory in one app.</string>
+    <string name="brand_about_tagline">وكيلك الذكي — يعمل على جهازك</string>
+    <string name="brand_about_text">Moataz Alalqami AI هو وكيل ذكاء اصطناعي متكامل على أندرويد: يجمع مزودي النماذج (OpenAI و Gemini و Anthropic و Open Router وأي API متوافق)، ومحرّك الوكلاء، وطرفية لينكس معزولة (Sandbox)، والذاكرة الدلالية، وبناء المشاريع — كله في تطبيق واحد يحمي خصوصيتك.</string>
+    <string name="brand_about_text_en">Moataz Alalqami AI is an all-in-one Android AI Agent: model providers (OpenAI, Gemini, Anthropic, Open Router and any OpenAI-compatible API), an agent runtime, an isolated Linux sandbox terminal, semantic memory and project building — in one app that respects your privacy.</string>
 </resources>

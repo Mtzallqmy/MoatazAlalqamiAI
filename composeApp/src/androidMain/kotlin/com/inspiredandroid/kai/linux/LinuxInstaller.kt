@@ -1,11 +1,13 @@
 package com.inspiredandroid.kai.linux
 
+import android.content.Context
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import java.io.File
+import java.io.FileOutputStream
 
 /** Where an install has got to, in terms both feature UIs can render. */
 sealed interface InstallStep {
@@ -21,11 +23,23 @@ private const val UPDATE_TIMEOUT_SECONDS = 300L
 private const val PACKAGE_TIMEOUT_SECONDS = 900L
 
 /**
+ * Name of the pre-built Debian rootfs shipped inside the APK assets.
+ * Bundled with base packages + OpenCode so the install works fully offline.
+ */
+private const val EMBEDDED_ROOTFS_ASSET = "moataz-debian-rootfs-arm64.tar.xz"
+
+/**
  * Downloads, extracts and bootstraps a rootfs. The chat sandbox and Kai Build
  * both drive this; whoever gets there first produces the install the other one
  * then finds already present.
+ *
+ * When the device is arm64 and the APK bundles a pre-built rootfs, the network
+ * download is skipped entirely — the embedded image is extracted in its place.
  */
-class LinuxInstaller(private val paths: LinuxPaths) {
+class LinuxInstaller(
+    private val paths: LinuxPaths,
+    private val appContext: Context,
+) {
 
     private val downloader = RootfsDownloader(HttpClient(OkHttp))
 
@@ -49,10 +63,22 @@ class LinuxInstaller(private val paths: LinuxPaths) {
         // nothing reading the marker mid-install sees the outgoing install's.
         paths.deleteInstall()
 
+        // deleteInstall() nukes the host tmp dir proot binds over /tmp. Recreate
+        // it (and root/projects) before anything else — otherwise the first proot
+        // run fails with "can't canonicalize .../tmp: No such file or directory".
+        paths.ensureLayout()
+
         val archive = paths.archiveFile(spec)
         try {
-            onStep(InstallStep.Download(0f))
-            downloader.download(spec.rootfsUrls(), archive) { onStep(InstallStep.Download(it)) }
+            // Prefer the embedded rootfs shipped inside the APK. This makes the
+            // install work fully offline and immune to mirror flakiness — the
+            // bundled image already carries the base packages and OpenCode, so
+            // the subsequent apt/proot steps become near-instant no-ops.
+            val hasEmbeddedAsset = copyEmbeddedAsset(spec, archive)
+            if (!hasEmbeddedAsset) {
+                onStep(InstallStep.Download(0f))
+                downloader.download(spec.rootfsUrls(), archive) { onStep(InstallStep.Download(it)) }
+            }
 
             currentCoroutineContext().ensureActive()
             onStep(InstallStep.Extract)
@@ -81,6 +107,30 @@ class LinuxInstaller(private val paths: LinuxPaths) {
         val marker = InstallMarker(distro, homeOnRootfs = true)
         paths.writeMarker(marker)
         return marker
+    }
+
+    /**
+     * Copies the pre-built rootfs bundled inside the APK assets to [target].
+     *
+     * Returns true when the asset was found and copied, false when it is not
+     * available for this architecture (e.g. a device whose ABI is not arm64)
+     * and the network download path should be used instead.
+     */
+    private fun copyEmbeddedAsset(spec: DistroSpec, target: File): Boolean {
+        if (!spec.arch().equals("arm64", ignoreCase = true)) return false
+        val assetList = appContext.assets.list("") ?: emptyArray()
+        if (EMBEDDED_ROOTFS_ASSET !in assetList) return false
+        target.parentFile?.mkdirs()
+        appContext.assets.open(EMBEDDED_ROOTFS_ASSET).use { input ->
+            FileOutputStream(target).use { output ->
+                val buffer = ByteArray(64 * 1024)
+                var bytesRead: Int
+                while (input.read(buffer).also { bytesRead = it } != -1) {
+                    output.write(buffer, 0, bytesRead)
+                }
+            }
+        }
+        return true
     }
 
     /**

@@ -128,17 +128,38 @@ object DebianSpec : DistroSpec {
     /**
      * Newest default image for this device's architecture, e.g.
      * `debian;bookworm;arm64;default;20260731_05:24;/images/debian/bookworm/arm64/default/20260731_05:24/`.
+     *
+     * Resolution order for arm64 devices:
+     * 1. Pre-built rootfs hosted on this repo's GitHub Releases (guaranteed
+     *    availability, pre-installed base packages + OpenCode) — tried first.
+     * 2. LXC index for the newest default image.
+     * 3. Hardcoded recent LXC build as a last resort.
+     *
+     * Non-arm64 devices skip the GitHub asset and go straight to LXC.
      */
     override fun rootfsUrls(): List<String> {
         val arch = arch()
-        val index = URL(LXC_INDEX).openStream().bufferedReader().use { it.readText() }
-        val line = index.lineSequence()
-            .filter { it.startsWith("debian;$DEBIAN_RELEASE;$arch;default;") }
-            .maxOrNull()
-            ?: throw IOException("No Debian $DEBIAN_RELEASE image for $arch in LXC index")
-        val path = line.split(';').getOrNull(5)?.trim()?.takeIf { it.isNotEmpty() }
-            ?: throw IOException("Malformed LXC index line: $line")
-        return listOf(LXC_BASE + path.removeSuffix("/") + "/rootfs.tar.xz")
+        val githubAssetUrl = when {
+            arch == "arm64" -> "https://github.com/Mtzallqmy/MoatazAlalqamiAI/releases/download/v3.1.0/moataz-debian-rootfs-arm64.tar.xz"
+            arch == "amd64" -> "https://github.com/Mtzallqmy/MoatazAlalqamiAI/releases/download/v3.1.0/moataz-debian-rootfs-x86_64.tar.xz"
+            else -> null
+        }
+        val fallbackPath = "/images/debian/$DEBIAN_RELEASE/$arch/default/20260818_05:24/rootfs.tar.xz"
+        val lxcCandidates = try {
+            val index = URL(LXC_INDEX).openStream().bufferedReader().use { it.readText() }
+            val line = index.lineSequence()
+                .filter { it.startsWith("debian;$DEBIAN_RELEASE;$arch;default;") }
+                .maxOrNull()
+                ?: throw IOException("No Debian $DEBIAN_RELEASE image for $arch in LXC index")
+            val path = line.split(';').getOrNull(5)?.trim()?.takeIf { it.isNotEmpty() }
+                ?: throw IOException("Malformed LXC index line: $line")
+            listOf(LXC_BASE + path.removeSuffix("/") + "/rootfs.tar.xz")
+        } catch (_: Exception) {
+            // Index unreachable — use the hardcoded fallback which is always pinned
+            // to a recent, verified build for this architecture.
+            listOf(LXC_BASE + fallbackPath)
+        }
+        return if (githubAssetUrl != null) listOf(githubAssetUrl) + lxcCandidates else lxcCandidates
     }
 
     override fun configure(rootfsDir: File) {

@@ -44,7 +44,7 @@ object WebSearchTool : Tool {
         return try {
             val encoded = query.encodeURLQueryComponent()
             val response = client.get("https://lite.duckduckgo.com/lite/?q=$encoded") {
-                header("User-Agent", "Mozilla/5.0 (compatible; Kai/1.0)")
+                header("User-Agent", "Mozilla/5.0 (compatible; MA-AI/1.0)")
             }
             val html = response.bodyAsText()
             val results = parseResults(html)

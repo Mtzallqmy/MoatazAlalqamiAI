@@ -220,7 +220,7 @@ class LinuxSandboxManager(
     private fun installer(): LinuxInstaller {
         val current = paths
         return synchronized(installers) {
-            installers.getOrPut(current.root.path) { LinuxInstaller(current) }
+            installers.getOrPut(current.root.path) { LinuxInstaller(current, context) }
         }
     }
 

@@ -459,6 +459,8 @@
     <string name="kai_build_step_configure">Configuring Debian…</string>
     <string name="kai_build_step_base_packages">Installing base packages…</string>
     <string name="kai_build_step_install_agent">Installing %1$s…</string>
+    <string name="kai_build_step_retry_mirror">Retrying with mirror %1$d…</string>
+    <string name="kai_build_auto_install_note">Auto-installs with Debian</string>
     <string name="kai_build_projects_new_placeholder">New project name</string>
     <string name="kai_build_projects_create">Create</string>
     <string name="kai_build_projects_empty">No projects yet. Tap + to create one.</string>
@@ -491,4 +493,14 @@
     <string name="kai_build_terminal_key_down_content_description">Arrow down</string>
     <string name="kai_build_terminal_key_right_content_description">Arrow right</string>
     <string name="kai_build_terminal_key_enter_content_description">Enter</string>
+    <string name="settings_fetch_models">جلب النماذج</string>
+    <string name="settings_models_discovered">تم اكتشاف %1$d نموذج</string>
+    <string name="settings_preset_openrouter">Open Router</string>
+    <string name="settings_preset_lmstudio">LM Studio (محلي)</string>
+    <string name="settings_preset_vllm">vLLM (محلي)</string>
+    <string name="settings_preset_groq_compatible">Groq Compatible</string>
+    <string name="settings_preset_together">Together AI</string>
+    <string name="settings_preset_fireworks">Fireworks</string>
+    <string name="settings_preset_mistral">Mistral</string>
+    <string name="settings_preset_ollama_local">Ollama (محلي)</string>
 </resources>
