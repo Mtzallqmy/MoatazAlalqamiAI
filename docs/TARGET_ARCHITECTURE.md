@@ -505,3 +505,29 @@ The user can then open: **Chat**, **Terminal**, **Files**, **Git**, **Preview**,
 - ❌ Deleting user data during migration
 - ❌ Disabling tests to pass CI
 - ❌ Mocks to claim Remote Sandbox works
+
+---
+
+## 6. Implementation status (v3.5.0)
+
+The full architecture described above is implemented on `feature/ai-gateway-hardening`:
+
+| Layer | Status | Implementation |
+|---|---|---|
+| 1. Agent Orchestrator | Done | `agents/AgentOrchestrator.kt` — multi-step think/approve/execute loop with budgets |
+| 2. AI Gateway | Done | `gateway/` — coordinator, router, fallback, health, usage |
+| 3. Tool Runtime | Done | `tools/` — 23 typed tools with risk levels and timeouts |
+| 4. Approval Engine | Done + audit | `agents/ApprovalEngine.kt` + `ApprovalAuditLog.kt` |
+| 5. SandboxBackend abstraction | Done | `sandbox/backend/` — config, capabilities, models, error types |
+| 6. LocalProotSandboxBackend | Done | `sandbox/backend/LocalProotSandboxBackend.kt` — wraps PRoot shell/executor |
+| 7. RemoteSandboxBackend | Done | `sandbox/remote/RemoteSandboxBackend.kt` — Ktor client over gateway protocol |
+| 8. Sandbox Provider | Done | `sandbox/remote/SandboxProvider.kt` — Incus-ready VM lifecycle |
+| 9. Gateway protocol | Done | `docs/SANDBOX_GATEWAY_PROTOCOL.md` |
+| 10. Ubuntu 26.04 default | Done | `linux/LinuxDistro.kt` UBUNTU default + rootfs asset in v3.4.0 release |
+| 11. Chat-integrated terminal | Done | `chat/composables/TerminalPanel.kt` + `WorkspacePanel.kt` |
+| 12. Secrets hardening | Done | `security/SecretStore.kt` — keystore-backed, no legacy keys |
+| 13. Redaction + cancellation safety | Done | `logging/` + CancellationException guards (10 sites) |
+| 14. OpenAI Compatible UI | Done | `settings/ServicesSettings.kt` — presets, model refresh, count |
+| 15. Tests | Done | 927 unit tests passing (0 failures) |
+
+Release history: v3.4.0 added Ubuntu 26.04 LTS rootfs (arm64) with embedded OpenCode; v3.5.0 adds the full agentic stack (orchestrator, tool runtime, sandbox backends, audit log).
