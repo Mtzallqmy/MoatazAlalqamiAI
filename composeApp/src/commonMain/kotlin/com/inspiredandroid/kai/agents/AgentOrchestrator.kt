@@ -410,4 +410,5 @@ fun ToolRuntime.availableToolIds(): List<String> = listOf(
     "sandbox.info", "sandbox.snapshot",
     "browser.open", "browser.read", "browser.click", "browser.type",
     "browser.back", "browser.extract", "browser.close",
+    "analyze_file",
 )

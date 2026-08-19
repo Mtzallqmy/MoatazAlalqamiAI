@@ -88,6 +88,7 @@ class ToolRuntime(
             "sandbox.info" -> sandboxInfo(parseSandboxInfo(raw))
             "sandbox.snapshot" -> sandboxSnapshot(parseSandboxSnapshot(raw))
             "preview.open" -> previewOpen(parsePreviewOpen(raw))
+            "analyze_file" -> analyzeFile(parseFileAnalysis(raw))
             "browser.open", "browser.read", "browser.click", "browser.type",
             "browser.back", "browser.extract", "browser.close" -> {
                 val dispatcher = browserDispatcher
@@ -117,6 +118,7 @@ class ToolRuntime(
         "sandbox.snapshot" -> ToolRiskLevel.READ_ONLY
         "browser.open", "browser.read", "browser.back", "browser.extract", "browser.close" -> ToolRiskLevel.READ_ONLY
         "browser.click", "browser.type" -> ToolRiskLevel.NETWORK
+        "analyze_file" -> ToolRiskLevel.READ_ONLY
         else -> ToolRiskLevel.WORKSPACE_WRITE
     }
 
@@ -376,6 +378,15 @@ class ToolRuntime(
         return ToolResult.Success(exposed)
     }
 
+    // ---------- File analysis ----------
+
+    suspend fun analyzeFile(args: FileAnalysisArgs): ToolResult {
+        val tool = FileAnalysisTool { backendFor(args.sandboxId) }
+        val result = withTimeout(DEFAULT_EXEC_TIMEOUT) { tool.analyze(args) }
+        emitActivity(ToolActivityEvent(ANALYZE_FILE_TOOL_ID, result is ToolResult.Success, args.fileName ?: "attachment"))
+        return result
+    }
+
     // ---------- Helpers ----------
 
     /** Override point for tests / wiring; defaults to the registered backend registry. */
@@ -535,4 +546,12 @@ private fun parsePreviewOpen(raw: Map<String, Any?>): PreviewOpenArgs =
     PreviewOpenArgs(
         sandboxId = raw["sandbox_id"] as? String ?: raw["sandboxId"] as? String ?: error("sandboxId required"),
         port = (raw["port"] as? Number)?.toInt() ?: error("port required"),
+    )
+
+private fun parseFileAnalysis(raw: Map<String, Any?>): FileAnalysisArgs =
+    FileAnalysisArgs(
+        sandboxId = raw["sandbox_id"] as? String ?: raw["sandboxId"] as? String ?: error("sandboxId required"),
+        fileName = raw["file_name"] as? String ?: raw["fileName"] as? String,
+        mimeType = raw["mime_type"] as? String ?: raw["mimeType"] as? String ?: "application/octet-stream",
+        data = raw["data"] as? String ?: error("data (base64) required"),
     )
