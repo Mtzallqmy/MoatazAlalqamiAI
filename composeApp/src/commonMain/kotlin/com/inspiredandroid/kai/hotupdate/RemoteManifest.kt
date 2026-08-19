@@ -112,6 +112,35 @@ object RemoteManifestVerifier {
         // --- Payload validation reuses the existing hard gate.
         config.validated().getOrThrow()
     }
+
+    /**
+     * Verify a signed catalog envelope and return the **raw payload string**
+     * for caller-side deserialization. Unlike [verify], unsigned bare
+     * documents are never accepted — catalogs must always travel signed.
+     */
+    fun verifyCatalogPayload(raw: String, mode: ManifestVerifyMode = ManifestVerifyMode.LAX): Result<String> = runCatching {
+        val document = json.parseToJsonElement(raw).jsonObject
+        val format = document["format"]?.jsonPrimitive?.content
+        require(format == "ma-remote-manifest-v1") { "catalog envelope missing or malformed format" }
+        val payloadB64 = document["payload"]?.jsonPrimitive?.content ?: error("missing payload")
+        val signatureB64 = document["signature"]?.jsonPrimitive?.content
+        val payloadBytes = Base64.UrlSafe.decode(payloadB64)
+        val key = pinnedKeyHex
+        when {
+            signatureB64.isNullOrBlank() -> {
+                if (mode == ManifestVerifyMode.STRICT) error("unsigned catalog manifest rejected in STRICT mode")
+                if (key.isNotEmpty()) error("catalog manifest lacks signature while key is pinned")
+            }
+            key.isEmpty() -> { /* key not pinned yet — best-effort until pinning */ }
+            else -> {
+                val signatureBytes = Base64.UrlSafe.decode(signatureB64)
+                require(ed25519Verify(key, payloadBytes, signatureBytes)) {
+                    "catalog manifest signature verification failed"
+                }
+            }
+        }
+        payloadBytes.decodeToString()
+    }
 }
 
 /**

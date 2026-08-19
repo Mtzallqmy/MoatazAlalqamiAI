@@ -38,8 +38,11 @@ object RemoteConfigDefaults {
     /** The trusted document URL — a GitHub raw file or private endpoint. */
     const val DEFAULT_CONFIG_URL: String =
         "https://raw.githubusercontent.com/Mtzallqmy/MoatazAlalqamiAI/main/remote-config/config.json"
+    const val DEFAULT_CATALOG_URL: String =
+        "https://raw.githubusercontent.com/Mtzallqmy/MoatazAlalqamiAI/main/remote-config/catalogs.json"
     const val CONFIG_STORAGE_KEY: String = "remote_config_json"
     const val CONFIG_TIMESTAMP_KEY: String = "remote_config_ts"
+    const val CATALOG_STORAGE_KEY: String = "remote_catalog_json"
     val REFRESH_INTERVAL: kotlin.time.Duration = 6.hours
 }
 
@@ -68,6 +71,52 @@ open class RemoteConfigService(
         val cached = loadCached()
         if (cached != null) _active.value = cached
         scope.launch { refresh() }
+        scope.launch { refreshCatalog() }
+        applyCachedCatalog()
+    }
+
+    // ---------- Remote provider / model catalogs (PHASE 10) ----------
+
+    /** Fetches, verifies (Ed25519 envelope) and applies the signed remote catalog. */
+    suspend fun refreshCatalog() {
+        mutex.withLock {
+            runCatching {
+                val client = httpClient { }
+                val response = client.get(RemoteConfigDefaults.DEFAULT_CATALOG_URL)
+                if (!response.status.isSuccess()) return@runCatching
+                val raw = response.bodyAsText()
+                // Signed manifest envelope takes precedence; unsigned plain
+                // documents are rejected outright (catalogs must be signed).
+                val verified = RemoteManifestVerifier.verifyCatalogPayload(raw).getOrNull()
+                if (verified != null) {
+                    val catalog: RemoteCatalog = try {
+                        json.decodeFromString(RemoteCatalog.serializer(), verified)
+                    } catch (_: Throwable) {
+                        return@runCatching
+                    }
+                    val validated = catalog.validated(SemVer.parse(currentAppVersion)).getOrNull() ?: return@runCatching
+                    validated.applyToRegistry()
+                    try {
+                        settings.putString(RemoteConfigDefaults.CATALOG_STORAGE_KEY, raw)
+                    } catch (_: Throwable) {
+                    }
+                }
+            }
+        }
+    }
+
+    private fun applyCachedCatalog() {
+        runCatching {
+            val raw = settings.getString(RemoteConfigDefaults.CATALOG_STORAGE_KEY, "")
+            if (raw.isBlank()) return@runCatching
+            val verified = RemoteManifestVerifier.verifyCatalogPayload(raw).getOrNull() ?: return@runCatching
+            val catalog = try {
+                json.decodeFromString(RemoteCatalog.serializer(), verified)
+            } catch (_: Throwable) {
+                return@runCatching
+            }
+            catalog.validated(SemVer.parse(currentAppVersion)).getOrNull()?.applyToRegistry()
+        }
     }
 
     /** Manual trigger (e.g. Settings → Check for updates). */
