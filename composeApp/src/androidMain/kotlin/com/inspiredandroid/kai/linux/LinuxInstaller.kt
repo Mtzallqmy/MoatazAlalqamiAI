@@ -82,7 +82,7 @@ class LinuxInstaller(
 
             currentCoroutineContext().ensureActive()
             onStep(InstallStep.Extract)
-            TarExtractor.extract(archive, paths.rootfsDir)
+            TarExtractor.extractSafe(archive, paths.rootfsDir)
         } finally {
             archive.delete()
         }
