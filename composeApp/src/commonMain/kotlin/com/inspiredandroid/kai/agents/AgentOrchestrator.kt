@@ -261,6 +261,10 @@ class AgentOrchestrator(
             val run = it[runId] ?: return@update it
             it + (runId to run.copy(status = status, finishedAt = currentTime()))
         }
+        // Browser session cleanup — every terminal state closes the run's session.
+        toolRuntime.browserDispatcher?.let { dispatcher ->
+            scope.launch { dispatcher.cleanupRun(runId) }
+        }
     }
 
     // ---------- Helpers ----------
@@ -404,4 +408,6 @@ fun ToolRuntime.availableToolIds(): List<String> = listOf(
     "process.list", "process.kill",
     "port.open", "port.close", "preview.open",
     "sandbox.info", "sandbox.snapshot",
+    "browser.open", "browser.read", "browser.click", "browser.type",
+    "browser.back", "browser.extract", "browser.close",
 )

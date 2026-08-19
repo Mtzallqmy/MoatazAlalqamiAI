@@ -44,6 +44,8 @@ typealias ToolActivityEmitter = (ToolActivityEvent) -> Unit
 class ToolRuntime(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val emitActivity: ToolActivityEmitter = {},
+    /** Optional browser dispatcher — set to enable browser.* tools. */
+    var browserDispatcher: BrowserDispatcher? = null,
 ) {
 
     /** Live streaming handles keyed by sandbox id — input/cancel target these. */
@@ -51,6 +53,11 @@ class ToolRuntime(
 
     fun shutdown() {
         scope.cancel()
+    }
+
+    /** Browser-activity hook for the dispatcher; surfaces browser calls into the activity timeline. */
+    internal fun emitBrowserActivity(toolName: String, success: Boolean, detail: String) {
+        emitActivity(ToolActivityEvent(tool = toolName, success = success, detail = detail))
     }
 
     // ---------- Dispatch ----------
@@ -81,6 +88,12 @@ class ToolRuntime(
             "sandbox.info" -> sandboxInfo(parseSandboxInfo(raw))
             "sandbox.snapshot" -> sandboxSnapshot(parseSandboxSnapshot(raw))
             "preview.open" -> previewOpen(parsePreviewOpen(raw))
+            "browser.open", "browser.read", "browser.click", "browser.type",
+            "browser.back", "browser.extract", "browser.close" -> {
+                val dispatcher = browserDispatcher
+                if (dispatcher == null) ToolResult.Failure("browser tools unavailable: no browser backend configured", retryable = false)
+                else dispatcher.call(name, raw)
+            }
             else -> ToolResult.Failure("Unknown tool: $name")
         }
     } catch (ce: CancellationException) {
@@ -102,6 +115,8 @@ class ToolRuntime(
         "fs.delete" -> ToolRiskLevel.DESTRUCTIVE
         "process.kill", "port.open", "port.close", "preview.open" -> ToolRiskLevel.NETWORK
         "sandbox.snapshot" -> ToolRiskLevel.READ_ONLY
+        "browser.open", "browser.read", "browser.back", "browser.extract", "browser.close" -> ToolRiskLevel.READ_ONLY
+        "browser.click", "browser.type" -> ToolRiskLevel.NETWORK
         else -> ToolRiskLevel.WORKSPACE_WRITE
     }
 
