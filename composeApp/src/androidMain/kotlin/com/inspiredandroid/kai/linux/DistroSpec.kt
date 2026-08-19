@@ -178,10 +178,64 @@ object DebianSpec : DistroSpec {
             "run/lock",
             "tmp",
         ).forEach { File(rootfsDir, it).mkdirs() }
+        // usr-merge repair: on some devices the tar extractor cannot recreate the
+        // root-level symlinks (bin -> usr/bin, sbin -> usr/sbin, lib -> usr/lib),
+        // so proot fails every command with "/bin/sh not found". Re-create any
+        // missing or broken ones and copy dash into place as a real /bin/sh file
+        // as a last resort — proot only needs a working shell.
+        repairUsrMergeSymlinks(rootfsDir)
+        ensureWorkingShell(rootfsDir)
         // dpkg fsyncs every unpacked file by default, which on a phone turns a
         // base install into a multi-minute affair.
         File(rootfsDir, "etc/dpkg/dpkg.cfg.d").mkdirs()
         File(rootfsDir, "etc/dpkg/dpkg.cfg.d/force-unsafe-io").writeText("force-unsafe-io\n")
+    }
+
+    /**
+     * Fixes usr-merge root symlinks that the extractor could not recreate.
+     * Debian bookworm is fully usr-merged, so /bin, /sbin and /lib are symlinks
+     * into /usr — if any of them is missing or a broken link, proot cannot even
+     * exec `/bin/sh`. Recreate each one pointing at its usr/ counterpart.
+     */
+    private fun repairUsrMergeSymlinks(rootfsDir: File) {
+        for ((linkPath, target) in listOf("bin" to "usr/bin", "sbin" to "usr/sbin", "lib" to "usr/lib")) {
+            val link = File(rootfsDir, linkPath)
+            val targetFile = File(rootfsDir, target)
+            val broken = link.exists() && (link.canonicalFile != link.absoluteFile || !link.canonicalFile.exists())
+            if (!link.exists() || broken) {
+                if (targetFile.exists()) {
+                    if (link.exists()) link.delete()
+                    try {
+                        java.nio.file.Files.createSymbolicLink(
+                            link.toPath(),
+                            java.nio.file.Paths.get(target),
+                        )
+                    } catch (_: Exception) {
+                        // Remaining failure is handled by ensureWorkingShell.
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Guarantees an executable `/bin/sh` exists on the rootfs: if /bin is still
+     * broken after symlink repair, copy dash directly into /bin/sh so proot can
+     * exec a shell at the canonical path. Dash is small (~130KB) and fully
+     * compatible with what the installer runs (`/bin/sh -c ...`).
+     */
+    private fun ensureWorkingShell(rootfsDir: File) {
+        val sh = File(rootfsDir, "bin/sh")
+        val works = sh.exists() && sh.canonicalFile.exists()
+        if (!works) {
+            val dash = File(rootfsDir, "usr/bin/dash")
+            if (dash.exists()) {
+                sh.parentFile?.mkdirs()
+                if (sh.exists()) sh.delete()
+                dash.copyTo(sh, overwrite = true)
+                sh.setExecutable(true, false)
+            }
+        }
     }
 
     /**
@@ -258,9 +312,57 @@ object UbuntuSpec : DistroSpec {
             "run/lock",
             "tmp",
         ).forEach { File(rootfsDir, it).mkdirs() }
+        // usr-merge repair: same safeguard as Debian — recreate root-level
+        // usr-merge symlinks the extractor could not restore and fall back to a
+        // real /bin/sh file so proot can always exec a shell.
+        repairUsrMergeSymlinks(rootfsDir)
+        ensureWorkingShell(rootfsDir)
         // dpkg fsyncs every unpacked file by default — deadly on flash storage.
         File(rootfsDir, "etc/dpkg/dpkg.cfg.d").mkdirs()
         File(rootfsDir, "etc/dpkg/dpkg.cfg.d/force-unsafe-io").writeText("force-unsafe-io\n")
+    }
+
+    /**
+     * Fixes usr-merge root symlinks that the extractor could not recreate —
+     * see the Debian implementation for details.
+     */
+    private fun repairUsrMergeSymlinks(rootfsDir: File) {
+        for ((linkPath, target) in listOf("bin" to "usr/bin", "sbin" to "usr/sbin", "lib" to "usr/lib")) {
+            val link = File(rootfsDir, linkPath)
+            val targetFile = File(rootfsDir, target)
+            val broken = link.exists() && (link.canonicalFile != link.absoluteFile || !link.canonicalFile.exists())
+            if (!link.exists() || broken) {
+                if (targetFile.exists()) {
+                    if (link.exists()) link.delete()
+                    try {
+                        java.nio.file.Files.createSymbolicLink(
+                            link.toPath(),
+                            java.nio.file.Paths.get(target),
+                        )
+                    } catch (_: Exception) {
+                        // Remaining failure is handled by ensureWorkingShell.
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Guarantees an executable `/bin/sh` exists on the rootfs — see the Debian
+     * implementation for details.
+     */
+    private fun ensureWorkingShell(rootfsDir: File) {
+        val sh = File(rootfsDir, "bin/sh")
+        val works = sh.exists() && sh.canonicalFile.exists()
+        if (!works) {
+            val dash = File(rootfsDir, "usr/bin/dash")
+            if (dash.exists()) {
+                sh.parentFile?.mkdirs()
+                if (sh.exists()) sh.delete()
+                dash.copyTo(sh, overwrite = true)
+                sh.setExecutable(true, false)
+            }
+        }
     }
 
     override val prootArgs = listOf("--link2symlink", "-L")

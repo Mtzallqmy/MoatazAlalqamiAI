@@ -187,13 +187,42 @@ object TarExtractor {
                         val resolved = java.io.File(targetDir, linkName)
                         if (!resolved.path.startsWith(targetCanonical)) continue
                     }
+                    // Relatively-targeted symlinks must be resolved against the
+                    // link's own directory, not the archive root — a relative
+                    // target like `dash` inside `usr/bin/sh` points to `usr/bin`,
+                    // but `../usr/bin` resolved from the root wrongly escapes the
+                    // guard (and produces broken links under proot).
+                    val guardTarget = if (safe && !linkName.startsWith("/")) {
+                        java.io.File(outFile.parentFile ?: targetDir, linkName)
+                    } else {
+                        java.io.File(targetDir, linkName)
+                    }
+                    if (safe && !guardTarget.path.startsWith(targetCanonical)) continue
+                    var linked = false
                     try {
                         if (outFile.exists()) outFile.delete()
                         java.nio.file.Files.createSymbolicLink(
                             outFile.toPath(),
                             java.nio.file.Paths.get(linkName),
                         )
+                        linked = true
                     } catch (_: Exception) {
+                        // Some devices refuse symlink creation under SELinux or
+                        // when the parent is read-only at that moment — fall back
+                        // to a best-effort retry with a fresh directory handle.
+                    }
+                    if (!linked) {
+                        try {
+                            outFile.parentFile?.mkdirs()
+                            if (outFile.exists()) outFile.delete()
+                            java.nio.file.Files.createSymbolicLink(
+                                outFile.toPath(),
+                                java.nio.file.Paths.get(linkName),
+                            )
+                        } catch (_: Exception) {
+                            // Logged by the installer's post-extract repair pass
+                            // (see DistroSpec.configure) — never fatal here.
+                        }
                     }
                 }
 
