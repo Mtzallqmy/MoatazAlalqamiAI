@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "min_app_version": "3.7.0",
+  "feature_flags": {
+    "agent_chat_attachments": true,
+    "remote_prompt_library": true,
+    "dynamic_tools": true,
+    "hot_update_announcements": true
+  },
+  "prompt_additions": [],
+  "persona_additions": [],
+  "dynamic_tools": [],
+  "system_prompt_append": "",
+  "announcement": null
+}
