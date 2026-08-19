@@ -71,7 +71,8 @@ object PolicyEngine {
         val program = argv[0].substringAfterLast('/').lowercase()
 
         // --- Hard deny: programs that alter disk/table/network stack at the OS level.
-        if (program in DENY_PROGRAMS) {
+        // Prefix matching catches suffixed variants like mkfs.ext4 or iptables-restore.
+        if (program in DENY_PROGRAMS || DENY_PROGRAMS.any { program.startsWith(it) && (program == it || program[it.length] == '.') }) {
             return PolicyDecision(CommandVerdict.DENY, listOf("prohibited program: $program"))
         }
 
@@ -84,11 +85,13 @@ object PolicyEngine {
             return PolicyDecision(CommandVerdict.DENY, listOf("destructive program targeting system path"))
         }
 
-        // --- Destructive flag + wildcard combos (rm -rf /, rm -r *).
+        // --- Destructive flag combos (rm -rf /, rm -r *, rm -rf /etc/passwd).
         if (program == "rm") {
             val hasDestructiveFlag = argv.drop(1).any { it.lowercase() in DESTRUCTIVE_FLAGS }
-            val hasWildcard = argv.drop(1).any { "*" in it || it in DANGEROUS_PATHS }
-            if (hasDestructiveFlag && (hasWildcard || argv.drop(1).any { it in DANGEROUS_PATHS })) {
+            val targetsDangerous = argv.drop(1).any { arg ->
+                "*" in arg || arg in DANGEROUS_PATHS || DANGEROUS_PATHS.any { arg.startsWith(it + "/") }
+            }
+            if (hasDestructiveFlag && targetsDangerous) {
                 return PolicyDecision(CommandVerdict.DENY, listOf("rm with destructive flags on wildcard/system path"))
             }
             if (hasDestructiveFlag) verdicts += CommandVerdict.ASK.also { reasons += "rm with destructive flags" }
