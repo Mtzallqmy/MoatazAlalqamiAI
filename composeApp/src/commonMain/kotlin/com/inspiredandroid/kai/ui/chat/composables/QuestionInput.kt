@@ -35,7 +35,9 @@ import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,6 +62,11 @@ import com.inspiredandroid.kai.currentPlatform
 import com.inspiredandroid.kai.data.ServiceEntry
 import com.inspiredandroid.kai.data.imageExtensions
 import com.inspiredandroid.kai.skills.SkillManifest
+import com.inspiredandroid.kai.SandboxController
+import com.inspiredandroid.kai.ui.chat.MentionCandidate
+import com.inspiredandroid.kai.ui.chat.collectMentionCandidates
+import com.inspiredandroid.kai.ui.chat.applyMentionSuggestion
+import com.inspiredandroid.kai.ui.chat.detectMentionQuery
 import com.inspiredandroid.kai.ui.gradientBrush
 import com.inspiredandroid.kai.ui.handCursor
 import com.inspiredandroid.kai.ui.outlineTextFieldColors
@@ -77,6 +84,7 @@ import kai.composeapp.generated.resources.ic_up
 import kai.composeapp.generated.resources.prompt_ask_question
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.vectorResource
@@ -96,6 +104,7 @@ fun QuestionInput(
     availableServices: ImmutableList<ServiceEntry> = persistentListOf(),
     onSelectService: (String) -> Unit = {},
     installedSkills: ImmutableList<SkillManifest> = persistentListOf(),
+    sandboxController: SandboxController? = null,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -120,6 +129,42 @@ fun QuestionInput(
                             TextFieldValue(
                                 text = if (rest.isEmpty()) "/${skill.id} " else newText,
                                 selection = TextRange(cursor.coerceAtMost(if (rest.isEmpty()) cursor else newText.length)),
+                            ),
+                        )
+                    },
+                )
+                Spacer(Modifier.padding(top = 4.dp))
+            }
+        }
+
+        // Mention autocomplete: `@<path>` inserts sandbox file content into the prompt.
+        // Candidates are fetched from the sandbox whenever the user is mid-token after
+        // an `@` at a token boundary; choosing one rewrites the token to the full path.
+        if (sandboxController != null) {
+            val mentionQuery = remember(textState.text, textState.selection) {
+                detectMentionQuery(textState.text, textState.selection.start)
+            }
+            var mentionCandidates by remember { mutableStateOf<List<MentionCandidate>>(persistentListOf()) }
+            LaunchedEffect(mentionQuery, sandboxController) {
+                mentionCandidates = if (mentionQuery != null) {
+                    collectMentionCandidates(sandbox = sandboxController)
+                } else {
+                    emptyList()
+                }
+            }
+            if (mentionQuery != null && mentionCandidates.isNotEmpty()) {
+                MentionAutocomplete(
+                    candidates = mentionCandidates.toImmutableList(),
+                    query = mentionQuery,
+                    onSelect = { candidate ->
+                        val text = textState.text
+                        val cursor = textState.selection.start
+                        val newText = applyMentionSuggestion(text, cursor, candidate.path)
+                        val inserted = "@${candidate.path} "
+                        onTextStateChange(
+                            TextFieldValue(
+                                text = newText,
+                                selection = TextRange(inserted.length.coerceAtMost(newText.length)),
                             ),
                         )
                     },

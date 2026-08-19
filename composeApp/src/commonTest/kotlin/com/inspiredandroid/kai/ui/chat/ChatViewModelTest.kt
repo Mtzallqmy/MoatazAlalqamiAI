@@ -49,7 +49,8 @@ class ChatViewModelTest {
 
     private fun createViewModel(): ChatViewModel {
         val noOpScheduler = TaskScheduler(fakeRepository, enabled = false)
-        return ChatViewModel(fakeRepository, noOpScheduler, unconfinedDispatcher)
+        val mentionResolver = MentionResolver(com.inspiredandroid.kai.NoOpSandboxController())
+        return ChatViewModel(fakeRepository, noOpScheduler, mentionResolver, unconfinedDispatcher)
     }
 
     @Test
@@ -57,7 +58,8 @@ class ChatViewModelTest {
         // Isolated paused dispatcher so the launched restore coroutine doesn't run synchronously.
         val backgroundDispatcher = StandardTestDispatcher()
         val noOpScheduler = TaskScheduler(fakeRepository, enabled = false)
-        val viewModel = ChatViewModel(fakeRepository, noOpScheduler, backgroundDispatcher)
+        val mentionResolver = MentionResolver(com.inspiredandroid.kai.NoOpSandboxController())
+        val viewModel = ChatViewModel(fakeRepository, noOpScheduler, mentionResolver, backgroundDispatcher)
 
         viewModel.state.test {
             // Restore hasn't run yet — initial state still has isRestoring=true.
