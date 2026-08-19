@@ -36,3 +36,15 @@ env JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ANDROID_HOME=/home/ubuntu/andro
 ```
 Test count script: /home/ubuntu/count_tests.py (reads XML in composeApp/build/test-results/testAndroidHostTest/)
 GitHub: Mtzallqmy/MoatazAlalqamiAI branch feature/ai-gateway-hardening, token in env. Version bump: libs.versions.toml appVersion → 3.6.0.
+
+## Bug report (Aug 19, from user screenshots)
+EISDIR during Linux install (Ubuntu rootfs extraction):
+`Error: /data/user/0/com.inspiredandroid.kai/files/linux-sandbox/rootfs/../usr/share/nodejs/@babel/plugin-bugfix-safari-id-destructuring-collision-in-function-expression/lib: open failed: EISDIR (Is a directory)`
+Root cause analysis (TarExtractor.kt androidMain): when tar header typeFlag is not recognized (e.g. GNU long-name '././@LongLink' type 'L'/'K', or PAX 'x'/'g'), the else branch does NOT skip the entry's block-aligned data for TYPE_REGULAR paths — actually it does skip at bottom for size>0. REAL BUG: when a DIRECTORY entry appears AFTER a regular-file path with the same name, or when two consecutive entries for same path where the FIRST is a directory header but the header's typeFlag '0' with size>0 while the path already exists as a DIRECTORY → FileOutputStream(outFile) throws EISDIR.
+Likely scenario in LXC rootfs: a dir named "…/lib" appears as type '5' later, but an entry with name "…/lib" and typeFlag '0' with size=0 (or a hardlink '1') appears — hardlink '1' with existing dir target uses File(targetDir,linkName) path but outFile itself may be dir → copyTo fails? No, EISDIR is from FileOutputStream open.
+Conclusion: the tar has a regular-file header whose path currently EXISTS AS A DIRECTORY on disk (tar ordering issue or duplicate entry for same name). Also longname 'L'/'K' entries are not handled: name '././@LongLink' with content following = actual name of next entry → the extractor writes data to wrong path? It skips via bottom path (size>0 skip), fine.
+FIX: before opening FileOutputStream for regular entry: if outFile.exists() && outFile.isDirectory, delete it first (outFile.deleteRecursively() — careful with proot but these are extracted dirs). Also after extracting a regular file, if an existing file blocks mkdirs for later dir, handle.
+Error path shows "rootfs/..usr/share/nodejs/…/lib" → the parent directory "lib" already created as directory, then a regular entry named "…/lib" (symlink target named lib? or tar entry for file named same) triggers.
+
+## User request 2 (same message)
+Add file upload/attachment support of ALL formats (images, PDF, etc.) so the agent/models can read, analyze, review, edit them in chat or terminal.

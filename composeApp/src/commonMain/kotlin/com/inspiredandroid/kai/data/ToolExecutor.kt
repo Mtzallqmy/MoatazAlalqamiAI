@@ -27,6 +27,10 @@ private const val MAX_TOOL_RESULT_LENGTH = 20_000
 
 class ToolExecutor(
     private val toolsProvider: () -> List<Tool> = { getAvailableTools() },
+    /** Remotely-delivered tool definitions (hot update — no APK needed). */
+    private val dynamicToolProvider: () -> List<com.inspiredandroid.kai.hotupdate.RemoteToolDefinition> = { emptyList() },
+    /** Executes remotely-delivered tools onto built-in executors. */
+    private val dynamicExecutor: (() -> com.inspiredandroid.kai.hotupdate.DynamicToolExecutor)? = null,
 ) {
 
     private val jsonParser = Json { ignoreUnknownKeys = true }
@@ -38,7 +42,23 @@ class ToolExecutor(
     ): String {
         val tools = toolsProvider()
         val tool = tools.find { it.schema.name == name }
-            ?: return """{"success": false, "error": "Unknown tool: $name"}"""
+            // Dynamic tools shipped through the remote config: schema + routing
+            // arrive over the air, execution lands on built-in executors only.
+            ?: run {
+                val dynamic = dynamicToolProvider().find { it.id == name }
+                if (dynamic != null && dynamicExecutor != null) {
+                    val executor = dynamicExecutor.invoke()
+                    val args = try { parseJsonToMap(arguments) } catch (e: Exception) {
+                        return """{"success": false, "error": "Failed to parse arguments: ${e.message}"}"""
+                    }
+                    return try {
+                        executor.execute(dynamic, args)
+                    } catch (e: Exception) {
+                        """{"success": false, "error": "Dynamic tool failed: ${e.message}"}"""
+                    }
+                }
+                return """{"success": false, "error": "Unknown tool: $name"}"""
+            }
 
         val args = try {
             parseJsonToMap(arguments)
