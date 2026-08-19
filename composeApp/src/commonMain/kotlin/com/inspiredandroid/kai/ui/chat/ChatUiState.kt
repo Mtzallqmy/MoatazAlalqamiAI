@@ -13,6 +13,7 @@ import com.inspiredandroid.kai.data.UiSubmission
 import com.inspiredandroid.kai.network.UiError
 import com.inspiredandroid.kai.network.dtos.gemini.GeminiChatRequestDto
 import com.inspiredandroid.kai.network.dtos.openaicompatible.OpenAICompatibleChatRequestDto
+import com.inspiredandroid.kai.tools.attachmentSummary
 import io.github.vinceglb.filekit.PlatformFile
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
@@ -53,6 +54,16 @@ private fun List<Attachment>.splitForMessage(): AttachmentSplit {
         } else {
             binaries.add(att)
         }
+    }
+    // Binary attachments (PDFs, office docs, archives, ...) get a short text
+    // summary — always included in the message so even text-only models know
+    // a file came along. Full extraction happens server-side via the agent's
+    // `analyze_file` sandbox tool when needed.
+    if (binaries.isNotEmpty()) {
+        prefix.appendLine("You have attached files:")
+        for (att in binaries) prefix.appendLine(attachmentSummary(att))
+        prefix.appendLine("Use the analyze_file tool to read their full contents.")
+        prefix.appendLine()
     }
     return AttachmentSplit(prefix.toString(), binaries)
 }

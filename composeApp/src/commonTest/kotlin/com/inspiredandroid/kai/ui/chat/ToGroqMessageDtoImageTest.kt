@@ -40,7 +40,15 @@ class ToGroqMessageDtoImageTest {
     fun `supportsImages=false flattens to plain JsonPrimitive and drops images`() {
         val dto = userWithImage().toGroqMessageDto(supportsImages = false)
 
-        assertEquals(JsonPrimitive("what's in this picture?"), dto.content)
+        // Images are dropped from content-parts for text-only services, but a
+        // short attachment summary is always kept in the text so text-only
+        // models still know a file came along (full extraction happens via the
+        // agent's `analyze_file` sandbox tool).
+        val content = dto.content
+        assertTrue(content is JsonPrimitive, "expected plain string content, got ${content?.let { it::class.simpleName }}")
+        val text = (content as JsonPrimitive).content
+        assertTrue(text.contains("cat.png"), "attachment summary must stay in the text")
+        assertTrue(text.contains("what's in this picture?"), "user message must stay in the text")
     }
 
     @Test

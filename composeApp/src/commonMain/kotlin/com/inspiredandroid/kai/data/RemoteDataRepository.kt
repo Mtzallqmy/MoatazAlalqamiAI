@@ -867,8 +867,9 @@ class RemoteDataRepository(
             // allocate a ByteArray large enough to OOM the process on multi-GB inputs.
             val rawSizeLimit = when (category) {
                 FileCategory.TEXT -> MAX_TEXT_FILE_BYTES.toLong()
-                FileCategory.PDF -> MAX_PDF_BYTES.toLong()
+                FileCategory.PDF, FileCategory.DOCUMENT -> MAX_PDF_BYTES.toLong()
                 FileCategory.IMAGE -> MAX_RAW_IMAGE_BYTES.toLong()
+                FileCategory.ARCHIVE -> MAX_PDF_BYTES.toLong()
                 FileCategory.UNSUPPORTED -> 0L
             }
             if (file.size() > rawSizeLimit) throw FileTooLargeException()
@@ -894,9 +895,15 @@ class RemoteDataRepository(
                     fileName = fileName,
                 )
 
-                FileCategory.PDF -> Attachment(
+                FileCategory.PDF, FileCategory.DOCUMENT -> Attachment(
                     data = Base64.encode(rawBytes),
-                    mimeType = "application/pdf",
+                    mimeType = fileMimeType ?: "application/octet-stream",
+                    fileName = fileName,
+                )
+
+                FileCategory.ARCHIVE -> Attachment(
+                    data = Base64.encode(rawBytes),
+                    mimeType = fileMimeType ?: "application/octet-stream",
                     fileName = fileName,
                 )
 
@@ -1466,8 +1473,10 @@ class RemoteDataRepository(
         // Images are offered only when both the service and the active model accept them —
         // mixed services (e.g. Z.AI) pair text-only models with multimodal ones.
         val imagesSupported = service.supportsImages && modelSupportsImages(currentModelId())
-        val base = if (imagesSupported) supportedFileExtensions else supportedFileExtensions - imageExtensions
-        return if (service.supportsPdf) base + "pdf" else base
+        // File support is independent of vision: all uploads flow through the
+        // universal attachment summary + `analyze_file` sandbox extraction, so
+        // every format FileClassification accepts is offered to the user.
+        return if (imagesSupported) supportedFileExtensions else supportedFileExtensions - imageExtensions
     }
 
     override fun currentService(): Service {
