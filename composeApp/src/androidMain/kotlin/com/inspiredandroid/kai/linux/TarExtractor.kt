@@ -121,6 +121,12 @@ object TarExtractor {
 
             if (typeFlag == TAR_TYPE_REGULAR_LEGACY || type == TAR_TYPE_REGULAR) {
                 outFile.parentFile?.mkdirs()
+                // LXC/Cloud rootfs sometimes emit a regular-file header for a
+                // path that already exists as a directory (duplicate entries /
+                // reordered listings) — that yields EISDIR on open. Remove it.
+                if (outFile.exists() && outFile.isDirectory) {
+                    outFile.deleteRecursively()
+                }
                 FileOutputStream(outFile).use { output ->
                     var remaining = size
                     while (remaining > 0) {
