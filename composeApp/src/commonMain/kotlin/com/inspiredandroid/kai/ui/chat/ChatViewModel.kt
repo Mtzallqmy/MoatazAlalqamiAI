@@ -48,6 +48,7 @@ import kotlin.time.Duration.Companion.seconds
 class ChatViewModel(
     private val dataRepository: DataRepository,
     private val taskScheduler: TaskScheduler,
+    private val mentionResolver: MentionResolver,
     private val backgroundDispatcher: CoroutineContext = getBackgroundDispatcher(),
     private val localNetworkPermissionController: PermissionController = PermissionController(AppPermission.LOCAL_NETWORK),
 ) : ViewModel() {
@@ -203,6 +204,9 @@ class ChatViewModel(
         val (strippedQuestion, activeSkillId) = parseSkillInvocation(question)
 
         currentJob = viewModelScope.launch(backgroundDispatcher) {
+            // `@<path>` mentions pull sandbox files into the prompt so the agent sees
+            // project/code files without the user attaching them manually.
+            val resolvedQuestion = if (strippedQuestion != null) mentionResolver.resolve(strippedQuestion) else strippedQuestion
             _state.update {
                 it.copy(
                     isLoading = true,
@@ -224,7 +228,7 @@ class ChatViewModel(
                 return@launch
             }
             try {
-                dataRepository.ask(strippedQuestion, files, uiSubmission, activeSkillId)
+                dataRepository.ask(resolvedQuestion, files, uiSubmission, activeSkillId)
 
                 // Auto-retry in interactive mode if the response has no valid kai-ui
                 if (_state.value.isInteractiveMode) {

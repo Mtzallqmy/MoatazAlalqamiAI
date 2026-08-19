@@ -141,8 +141,8 @@ object DebianSpec : DistroSpec {
     override fun rootfsUrls(): List<String> {
         val arch = arch()
         val githubAssetUrl = when {
-            arch == "arm64" -> "https://github.com/Mtzallqmy/MoatazAlalqamiAI/releases/download/v3.1.0/moataz-debian-rootfs-arm64.tar.xz"
-            arch == "amd64" -> "https://github.com/Mtzallqmy/MoatazAlalqamiAI/releases/download/v3.1.0/moataz-debian-rootfs-x86_64.tar.xz"
+            arch == "arm64" -> "https://github.com/Mtzallqmy/MoatazAlalqamiAI/releases/download/v4.1.0/moataz-debian-rootfs-arm64.tar.xz"
+            arch == "amd64" -> "https://github.com/Mtzallqmy/MoatazAlalqamiAI/releases/download/v4.1.0/moataz-debian-rootfs-x86_64.tar.xz"
             else -> null
         }
         val fallbackPath = "/images/debian/$DEBIAN_RELEASE/$arch/default/20260818_05:24/rootfs.tar.xz"
@@ -229,8 +229,8 @@ object UbuntuSpec : DistroSpec {
     override fun rootfsUrls(): List<String> {
         val arch = arch()
         val githubAssetUrl = when {
-            arch == "arm64" -> "https://github.com/Mtzallqmy/MoatazAlalqamiAI/releases/download/v3.4.0/moataz-ubuntu-rootfs-arm64.tar.xz"
-            arch == "amd64" -> "https://github.com/Mtzallqmy/MoatazAlalqamiAI/releases/download/v3.4.0/moataz-ubuntu-rootfs-x86_64.tar.xz"
+            arch == "arm64" -> "https://github.com/Mtzallqmy/MoatazAlalqamiAI/releases/download/v4.1.0/moataz-ubuntu-rootfs-arm64.tar.xz"
+            arch == "amd64" -> "https://github.com/Mtzallqmy/MoatazAlalqamiAI/releases/download/v4.1.0/moataz-ubuntu-rootfs-x86_64.tar.xz"
             else -> null
         }
         // Ubuntu Cloud Images release tarballs — Canonical CDN, always available.

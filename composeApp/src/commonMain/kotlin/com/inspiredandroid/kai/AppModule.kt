@@ -124,6 +124,10 @@ val appModule = module {
     single<SkillManager> {
         SkillManager(get<SandboxController>())
     }
+    // `@<path>` mentions in the chat composer: pulls sandbox files into the prompt.
+    single<com.inspiredandroid.kai.ui.chat.MentionResolver> {
+        com.inspiredandroid.kai.ui.chat.MentionResolver(get<SandboxController>())
+    }
     // AI Gateway coordination layer: one source of truth for routing,
     // health and usage bookkeeping. Constructor-injected so the repository
     // never reaches past the coordinator surface.
@@ -200,5 +204,5 @@ val appModule = module {
     // Same browser, second environment: Kai Build's Debian instead of the chat sandbox.
     viewModel(KAI_BUILD_FILES) { SandboxFileBrowserViewModel(get<KaiBuildController>().files) }
     viewModel { SplinterlandsViewModel(get<DataRepository>(), get(), get(), get<SplinterlandsApi>()) }
-    viewModel { ChatViewModel(get<DataRepository>(), get<TaskScheduler>(), localNetworkPermissionController = get(permissionQualifier(AppPermission.LOCAL_NETWORK))) }
+    viewModel { ChatViewModel(get<DataRepository>(), get<TaskScheduler>(), get<com.inspiredandroid.kai.ui.chat.MentionResolver>(), localNetworkPermissionController = get(permissionQualifier(AppPermission.LOCAL_NETWORK))) }
 }

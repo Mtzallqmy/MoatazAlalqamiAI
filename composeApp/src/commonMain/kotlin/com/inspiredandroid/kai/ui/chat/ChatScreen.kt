@@ -136,6 +136,7 @@ fun ChatScreen(
     isSandboxAvailable: Boolean = false,
     isKaiBuildAvailable: Boolean = false,
     navigationTabBar: (@Composable () -> Unit)? = null,
+    sandboxController: com.inspiredandroid.kai.SandboxController? = null,
 ) {
     val uiState by viewModel.state.collectAsStateWithLifecycle()
 
@@ -146,6 +147,7 @@ fun ChatScreen(
         isSandboxAvailable = isSandboxAvailable,
         isKaiBuildAvailable = isKaiBuildAvailable,
         navigationTabBar = navigationTabBar,
+        sandboxController = sandboxController,
     )
 }
 
@@ -160,6 +162,7 @@ fun ChatScreenContent(
     initialSandboxOpen: Boolean = false,
     previewSandboxState: SandboxUiState? = null,
     previewSandboxLines: ImmutableList<TerminalLine> = persistentListOf(),
+    sandboxController: com.inspiredandroid.kai.SandboxController? = null,
 ) {
     // Kai Build is a transient surface, not a conversation — unlike interactive
     // mode it needs no persistence beyond surviving configuration changes.
@@ -168,6 +171,7 @@ fun ChatScreenContent(
     when {
         uiState.isInteractiveMode && !uiState.isRestoring -> InteractiveModeScreen(
             uiState = uiState,
+            sandboxController = sandboxController,
         )
 
         isKaiBuildOpen -> KaiBuildScreen(onExit = { isKaiBuildOpen = false })
@@ -182,6 +186,7 @@ fun ChatScreenContent(
             initialSandboxOpen = initialSandboxOpen,
             previewSandboxState = previewSandboxState,
             previewSandboxLines = previewSandboxLines,
+            sandboxController = sandboxController,
         )
     }
 }
@@ -191,6 +196,7 @@ fun ChatScreenContent(
 @Composable
 private fun InteractiveModeScreen(
     uiState: ChatUiState,
+    sandboxController: com.inspiredandroid.kai.SandboxController? = null,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -288,6 +294,7 @@ private fun InteractiveModeScreen(
                         availableServices = interactiveServices,
                         onSelectService = uiState.actions.selectService,
                         installedSkills = uiState.installedSkills,
+                        sandboxController = sandboxController,
                     )
                 }
             }
@@ -490,9 +497,10 @@ private fun ChatModeScreen(
     isSandboxAvailable: Boolean,
     onOpenKaiBuild: (() -> Unit)?,
     navigationTabBar: (@Composable () -> Unit)?,
-    initialSandboxOpen: Boolean = false,
-    previewSandboxState: SandboxUiState? = null,
-    previewSandboxLines: ImmutableList<TerminalLine> = persistentListOf(),
+    initialSandboxOpen: Boolean,
+    previewSandboxState: SandboxUiState?,
+    previewSandboxLines: ImmutableList<TerminalLine>,
+    sandboxController: com.inspiredandroid.kai.SandboxController? = null,
 ) {
     var showHistorySheet by remember { mutableStateOf(false) }
     var isSandboxOpen by rememberSaveable { mutableStateOf(initialSandboxOpen) }
@@ -941,6 +949,7 @@ private fun ChatModeScreen(
                     availableServices = uiState.availableServices,
                     onSelectService = uiState.actions.selectService,
                     installedSkills = uiState.installedSkills,
+                    sandboxController = sandboxController,
                 )
             }
         }

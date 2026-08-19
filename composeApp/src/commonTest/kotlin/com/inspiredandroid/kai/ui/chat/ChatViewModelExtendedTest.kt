@@ -41,7 +41,8 @@ class ChatViewModelExtendedTest {
 
     private fun createViewModel(): ChatViewModel {
         val noOpScheduler = TaskScheduler(fakeRepository, enabled = false)
-        return ChatViewModel(fakeRepository, noOpScheduler, unconfinedDispatcher)
+        val mentionResolver = MentionResolver(com.inspiredandroid.kai.NoOpSandboxController())
+        return ChatViewModel(fakeRepository, noOpScheduler, mentionResolver, unconfinedDispatcher)
     }
 
     private fun makeServiceEntry(instanceId: String, service: Service) = ServiceEntry(
