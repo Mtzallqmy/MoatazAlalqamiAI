@@ -1,0 +1,7 @@
+{
+  "format": "ma-remote-manifest-v1",
+  "timestamp_epoch": 1787100000,
+  "payload": "eyJjYXRhbG9nX3ZlcnNpb24iOjEsIm1pbl9hcHBfdmVyc2lvbiI6IjMuOS4wIiwicHJvdmlkZXJzIjpbXSwibW9kZWxfY2F0YWxvZyI6W119",
+  "algorithm": "ed25519",
+  "signature": null
+}

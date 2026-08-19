@@ -58,6 +58,7 @@ sealed interface DistroSpec {
         fun of(distro: LinuxDistro): DistroSpec = when (distro) {
             LinuxDistro.ALPINE -> AlpineSpec
             LinuxDistro.DEBIAN -> DebianSpec
+            LinuxDistro.UBUNTU -> UbuntuSpec
         }
     }
 }
@@ -189,6 +190,79 @@ object DebianSpec : DistroSpec {
      * install fails with a dpkg subprocess error even though `apt-get update`
      * succeeded. `-L` is the companion lstat fix.
      */
+    override val prootArgs = listOf("--link2symlink", "-L")
+
+    override val env = mapOf("DEBIAN_FRONTEND" to "noninteractive")
+}
+
+/**
+ * Ubuntu 26.04 LTS (Noble) — fetched from Ubuntu Cloud Images (the same
+ * tarballs Canonical ships for cloud instances). Unlike the Debian LXC path
+ * these archives are architecture-specific and already contain a working apt
+ * with the `universe` repository enabled.
+ *
+ * Resolution order:
+ * 1. Pre-built rootfs hosted on this repo's GitHub Releases (guaranteed
+ *    availability, pre-installed base packages + OpenCode) — tried first.
+ * 2. Ubuntu Cloud Images release tarball (Canonical CDN, always available).
+ * 3. LXC index as a last resort.
+ */
+object UbuntuSpec : DistroSpec {
+
+    override val distro = LinuxDistro.UBUNTU
+
+    override val archiveName = "ubuntu-cloud-rootfs.tar.xz"
+
+    private const val UBUNTU_RELEASE = "26.04"
+
+    override fun arch(): String {
+        val abi = Build.SUPPORTED_ABIS.firstOrNull().orEmpty()
+        return when {
+            abi.startsWith("arm64") -> "arm64"
+            abi.startsWith("armeabi") -> "armhf"
+            abi.startsWith("x86_64") -> "amd64"
+            abi.startsWith("x86") -> "i386"
+            else -> "arm64"
+        }
+    }
+
+    override fun rootfsUrls(): List<String> {
+        val arch = arch()
+        val githubAssetUrl = when {
+            arch == "arm64" -> "https://github.com/Mtzallqmy/MoatazAlalqamiAI/releases/download/v3.4.0/moataz-ubuntu-rootfs-arm64.tar.xz"
+            arch == "amd64" -> "https://github.com/Mtzallqmy/MoatazAlalqamiAI/releases/download/v3.4.0/moataz-ubuntu-rootfs-x86_64.tar.xz"
+            else -> null
+        }
+        // Ubuntu Cloud Images release tarballs — Canonical CDN, always available.
+        val cdnUrl = "https://cloud-images.ubuntu.com/releases/$UBUNTU_RELEASE/release/ubuntu-$UBUNTU_RELEASE-server-cloudimg-$arch-root.tar.gz"
+        val lxcUrl = "$LXC_BASE/images/ubuntu/$UBUNTU_RELEASE/$arch/default/latest/rootfs.tar.xz"
+        return buildList {
+            if (githubAssetUrl != null) add(githubAssetUrl)
+            add(cdnUrl)
+            add(lxcUrl)
+        }
+    }
+
+    override fun configure(rootfsDir: File) {
+        TarExtractor.makeWritable(rootfsDir)
+        TarExtractor.writeResolvConf(rootfsDir)
+        // Ubuntu cloud images ship empty dirs for some apt state paths that
+        // the tar extractor skips; recreate them so apt can bootstrap.
+        listOf(
+            "var/lib/apt/lists/partial",
+            "var/cache/apt/archives/partial",
+            "var/lib/dpkg/updates",
+            "var/lib/dpkg/info",
+            "var/lib/dpkg/alternatives",
+            "var/log",
+            "run/lock",
+            "tmp",
+        ).forEach { File(rootfsDir, it).mkdirs() }
+        // dpkg fsyncs every unpacked file by default — deadly on flash storage.
+        File(rootfsDir, "etc/dpkg/dpkg.cfg.d").mkdirs()
+        File(rootfsDir, "etc/dpkg/dpkg.cfg.d/force-unsafe-io").writeText("force-unsafe-io\n")
+    }
+
     override val prootArgs = listOf("--link2symlink", "-L")
 
     override val env = mapOf("DEBIAN_FRONTEND" to "noninteractive")

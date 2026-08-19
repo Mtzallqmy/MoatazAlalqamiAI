@@ -10,6 +10,11 @@ import java.util.zip.GZIPInputStream
 
 private const val BUFFER_SIZE = 8192
 private const val TAR_BLOCK_SIZE = 512
+/** Hard caps against tar bombs: unbounded archives can exhaust disk in seconds. */
+private const val MAX_TAR_ENTRIES = 100_000L
+private const val MAX_TAR_SINGLE_FILE_BYTES = 512L * 1024 * 1024
+private const val MAX_TAR_TOTAL_BYTES = 2L * 1024 * 1024 * 1024
+private const val MAX_TAR_FILENAME_LENGTH = 512
 private const val TAR_NAME_OFFSET = 0
 private const val TAR_MODE_OFFSET = 100
 private const val TAR_SIZE_OFFSET = 124
@@ -33,6 +38,14 @@ object TarExtractor {
         val raw = BufferedInputStream(FileInputStream(archive))
         val stream = if (archive.name.endsWith(".xz")) XZInputStream(raw) else GZIPInputStream(raw)
         stream.use { extractTar(it, targetDir) }
+    }
+
+    /** Hardened extraction with tar-bomb and traversal guards, for untrusted archives. */
+    fun extractSafe(archive: File, targetDir: File) {
+        targetDir.mkdirs()
+        val raw = BufferedInputStream(FileInputStream(archive))
+        val stream = if (archive.name.endsWith(".xz")) XZInputStream(raw) else GZIPInputStream(raw)
+        stream.use { extractTar(it, targetDir, safe = true) }
     }
 
     fun makeWritable(rootfsDir: File) {
@@ -89,10 +102,12 @@ object TarExtractor {
         file.writeText(content)
     }
 
-    private fun extractTar(inputStream: InputStream, targetDir: File) {
+    private fun extractTar(inputStream: InputStream, targetDir: File, safe: Boolean = false) {
         val headerBuffer = ByteArray(TAR_BLOCK_SIZE)
         val dataBuffer = ByteArray(BUFFER_SIZE)
         val targetCanonical = targetDir.canonicalPath
+        var entryCount = 0L
+        var totalBytes = 0L
 
         while (true) {
             val headerBytesRead = readFully(inputStream, headerBuffer)
@@ -113,6 +128,22 @@ object TarExtractor {
             val type = typeFlag.toInt().toChar()
             val linkName = readTarString(headerBuffer, TAR_LINK_OFFSET, 100)
 
+            // --- Tar bomb + filename guards (safe mode, for untrusted archives).
+            if (safe) {
+                entryCount++
+                if (entryCount > MAX_TAR_ENTRIES) break
+                if (size > MAX_TAR_SINGLE_FILE_BYTES) {
+                    if (size > 0) skipBytes(inputStream, alignToBlock(size))
+                    continue
+                }
+                totalBytes += size
+                if (totalBytes > MAX_TAR_TOTAL_BYTES) break
+                if (fullName.length > MAX_TAR_FILENAME_LENGTH || fullName.contains("\u0000")) {
+                    if (size > 0) skipBytes(inputStream, alignToBlock(size))
+                    continue
+                }
+            }
+
             val outFile = File(targetDir, fullName)
             if (!outFile.canonicalPath.startsWith(targetCanonical)) {
                 skipBytes(inputStream, alignToBlock(size))
@@ -121,6 +152,12 @@ object TarExtractor {
 
             if (typeFlag == TAR_TYPE_REGULAR_LEGACY || type == TAR_TYPE_REGULAR) {
                 outFile.parentFile?.mkdirs()
+                // LXC/Cloud rootfs sometimes emit a regular-file header for a
+                // path that already exists as a directory (duplicate entries /
+                // reordered listings) — that yields EISDIR on open. Remove it.
+                if (outFile.exists() && outFile.isDirectory) {
+                    outFile.deleteRecursively()
+                }
                 FileOutputStream(outFile).use { output ->
                     var remaining = size
                     while (remaining > 0) {
@@ -144,6 +181,12 @@ object TarExtractor {
 
                 '2' -> {
                     outFile.parentFile?.mkdirs()
+                    // In safe mode, only accept symlinks that resolve inside the
+                    // target tree so a crafted archive cannot escape via links.
+                    if (safe) {
+                        val resolved = java.io.File(targetDir, linkName)
+                        if (!resolved.path.startsWith(targetCanonical)) continue
+                    }
                     try {
                         if (outFile.exists()) outFile.delete()
                         java.nio.file.Files.createSymbolicLink(
@@ -157,6 +200,9 @@ object TarExtractor {
                 '1' -> {
                     val linkTarget = File(targetDir, linkName)
                     outFile.parentFile?.mkdirs()
+                    // Hard link must also resolve inside the target tree (defends
+                    // against a crafted archive linking to an absolute host path).
+                    if (!linkTarget.path.startsWith(targetCanonical)) continue
                     if (linkTarget.exists()) {
                         linkTarget.copyTo(outFile, overwrite = true)
                     }

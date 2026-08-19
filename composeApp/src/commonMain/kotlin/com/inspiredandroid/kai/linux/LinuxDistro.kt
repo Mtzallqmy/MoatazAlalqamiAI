@@ -44,6 +44,43 @@ enum class LinuxDistro(
     ),
 
     /**
+     * Ubuntu 26.04 LTS — the default distro for the Agentic Development
+     * Platform (v3.4.0+). Uses apt (same family as Debian) but ships with a
+     * larger base: `build-essential` and `python3-venv` are included because
+     * coding agents expect them, `jq`/`ripgrep` because the agent's tools
+     * rely on structured output, and `nodejs`/`npm` so JavaScript projects
+     * scaffold without a second package install.
+     */
+    UBUNTU(
+        id = "ubuntu",
+        displayName = "Ubuntu 26.04 LTS",
+        basePackages = listOf(
+            "bash", "ca-certificates", "curl", "wget", "git",
+            "openssh-client", "nano", "less", "jq", "ripgrep",
+            "zip", "unzip", "tar", "xz-utils", "python3", "python3-pip",
+            "python3-venv", "nodejs", "npm", "build-essential", "make",
+            "cmake", "pkg-config", "coreutils", "findutils", "sed",
+            "grep", "procps", "rsync", "file",
+        ),
+        optionalPackages = listOf(
+            "golang-go",
+            "ruby",
+            "rustc",
+            "cargo",
+            "default-jre",
+            "default-jdk",
+            "docker.io",
+            "podman",
+            "sqlite3",
+            "postgresql",
+            "nginx",
+            "openssh-server",
+            "lftp",
+        ),
+        packageManager = AptPackageManager,
+    ),
+
+    /**
      * `bash` is infrastructure rather than convenience: every persistent shell
      * session execs it directly, so the minirootfs is unusable without it.
      */
@@ -67,10 +104,11 @@ enum class LinuxDistro(
 
     companion object {
         /**
-         * What a fresh install becomes unless the user picks otherwise, and what
-         * Kai Build always uses.
+         * What a fresh install becomes unless the user picks otherwise.
+         * Ubuntu 26.04 LTS is the default for the Agentic Development Platform
+         * (v3.4.0+); Kai Build still uses [DEBIAN] for compatibility.
          */
-        val DEFAULT = DEBIAN
+        val DEFAULT = UBUNTU
 
         /**
          * Installs made before the distro was recorded are Alpine — that was the

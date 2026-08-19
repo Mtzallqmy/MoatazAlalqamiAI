@@ -250,6 +250,17 @@ private fun DistroPicker(
             selected = selected == LinuxDistro.ALPINE,
             onSelect = onSelect,
         )
+        DistroOption(
+            distro = LinuxDistro.UBUNTU,
+            title = "Ubuntu 26.04 LTS (resolute)",
+            detail = if (LinuxDistro.UBUNTU in installed) {
+                "Installed with OpenCode agent built in"
+            } else {
+                "Default agentic environment — Ubuntu LTS + build tools + embedded OpenCode agent"
+            },
+            selected = selected == LinuxDistro.UBUNTU,
+            onSelect = onSelect,
+        )
     }
 }
 

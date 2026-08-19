@@ -607,6 +607,14 @@ class BuildEnvironmentManager(
             timeoutSeconds = 30,
         )
 
+        // If the binary is already present (e.g. from a pre-bootstrapped rootfs
+        // that ships OpenCode), skip the download entirely.
+        val alreadyInstalled = executor.ensureAgentBinary(agent.binary)
+        if (alreadyInstalled) {
+            Log.i(TAG, "${agent.id} already installed (pre-bootstrapped rootfs), skipping download")
+            return@withLock true
+        }
+
         // Primary URL first; when it fails, fall back to mirrors in order.
         // Each fallback is tried with a backoff so a flaky mobile connection gets
         // a second chance before giving up on that mirror.

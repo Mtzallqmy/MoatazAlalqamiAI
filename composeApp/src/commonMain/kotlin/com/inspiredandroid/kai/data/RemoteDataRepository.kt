@@ -95,14 +95,8 @@ import kotlin.time.ExperimentalTime
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-private const val MAX_TOOL_ITERATIONS = 15
-private const val MIN_TOOL_DISPLAY_MS = 2000L
-private const val MAX_REPEATED_TOOL_CALLS = 3
 private const val MAX_API_RETRIES = 2
 private const val MAX_HEARTBEAT_MESSAGES = 50
-private const val ESTIMATED_CHARS_PER_TOKEN = 4
-private const val COMPACTION_THRESHOLD = 0.7 // Compact when history exceeds 70% of context window
-private const val COMPACTION_KEEP_RECENT = 4 // Number of recent user exchanges to keep verbatim
 
 // Explicit allowlist of tools exposed to the on-device (LiteRT) model. We use a
 // hardcoded name list rather than a structural filter because small Gemma models hit
@@ -121,38 +115,21 @@ internal val LOCAL_TOOL_ALLOWLIST = setOf(
     "execute_shell_command",
 )
 
-private data class LoopChatResult(
-    val textContent: String,
-    val reasoningContent: String? = null,
-    val isThinkingContent: Boolean = false,
-    val toolCalls: List<ToolCallInfo>,
-)
+/** @see ChatLoopSessionResult — the loop result now lives at the isolated chat boundary. */
+private typealias LoopChatResult = ChatLoopSessionResult
 
 /** Final answer from a single assistant turn — text and (optionally) the reasoning trace
  * that produced it. Returned from [askWithService] so the caller can persist both. */
-private data class AssistantTurn(
-    val content: String,
-    val reasoningContent: String? = null,
-)
+private typealias AssistantTurn = ChatLoopTurn
 
-private enum class BailoutReason { LIMIT_REACHED, REPEATING }
+/** @see ChatLoopBailoutReason — bailout reasons now live at the isolated chat boundary. */
+private typealias BailoutReason = ChatLoopBailoutReason
 
-private fun bailoutPrompt(reason: BailoutReason): String = when (reason) {
-    BailoutReason.LIMIT_REACHED -> "You have reached the tool call limit. Please respond with the best answer you have so far based on the information gathered."
-    BailoutReason.REPEATING -> "You are repeating the same tool calls. Please respond with the best answer you have so far."
-}
+/** @see ChatLoopBailoutPrompt */
+private fun bailoutPrompt(reason: BailoutReason): String = ChatLoopBailoutPrompt.bailoutPrompt(reason)
 
-private interface ToolLoopStrategy {
-    suspend fun chat(history: List<History>, systemPrompt: String?): LoopChatResult
-    suspend fun bailout(history: List<History>, systemPrompt: String?, reason: BailoutReason): String
-
-    /**
-     * Context budget used to trim raw history between tool rounds. Providers that send the
-     * history as-is (Gemini, Anthropic) declare their window here; the OpenAI-compatible
-     * strategy trims the built message list inside [chat] instead and leaves this null.
-     */
-    val historyContextWindowTokens: Int? get() = null
-}
+/** Strategy that wraps one provider's wire protocol behind the tool loop. */
+private typealias ToolLoopStrategy = ChatLoopStrategy
 
 class RemoteDataRepository(
     private val requests: Requests,
@@ -324,7 +301,7 @@ class RemoteDataRepository(
     /** Approximate token count of the outgoing request, for routing and budget gates. */
     private fun estimateHistoryTokens(messages: List<History>, systemPrompt: String?): Int {
         val chars = messages.sumOf { it.content.length } + (systemPrompt?.length ?: 0)
-        return (chars / ESTIMATED_CHARS_PER_TOKEN).coerceAtLeast(1)
+        return (chars / ChatLoopConstants.ESTIMATED_CHARS_PER_TOKEN).coerceAtLeast(1)
     }
 
     private fun recordProviderError(instanceId: String, error: Exception) {
@@ -687,8 +664,8 @@ class RemoteDataRepository(
                 """{"success": false, "error": "${e.message ?: "Tool execution failed"}"}"""
             }
             val elapsed = Clock.System.now().toEpochMilliseconds() - startTime
-            if (elapsed < MIN_TOOL_DISPLAY_MS) {
-                delay(MIN_TOOL_DISPLAY_MS.milliseconds - elapsed.milliseconds)
+            if (elapsed < ChatLoopConstants.MIN_TOOL_DISPLAY_MS) {
+                delay(ChatLoopConstants.MIN_TOOL_DISPLAY_MS.milliseconds - elapsed.milliseconds)
             }
             history.update { h ->
                 buildList(h.size) {
@@ -1002,7 +979,7 @@ class RemoteDataRepository(
                 // On-device models handle their own context limits, so skip this check for them
                 if (!entry.service.isOnDevice) {
                     val creds = instanceCredentials(entry.instanceId, entry.service)
-                    val entryWindowChars = ModelCatalog.estimateContextWindow(creds.modelId) * ESTIMATED_CHARS_PER_TOKEN
+                    val entryWindowChars = ModelCatalog.estimateContextWindow(creds.modelId) * ChatLoopConstants.ESTIMATED_CHARS_PER_TOKEN
                     if (historyChars > entryWindowChars) {
                         lastException = ContextWindowExceededException()
                         _fallbackStatus.value = FallbackStatus(
@@ -1206,7 +1183,7 @@ class RemoteDataRepository(
         while (true) {
             iteration++
             val visible = history.value.filter { it.role != History.Role.TOOL_EXECUTING }
-            if (iteration > MAX_TOOL_ITERATIONS) {
+            if (iteration > ChatLoopConstants.MAX_TOOL_ITERATIONS) {
                 return AssistantTurn(strategy.bailout(visible, systemPrompt, BailoutReason.LIMIT_REACHED))
             }
             val result = strategy.chat(visible, systemPrompt)
@@ -1218,7 +1195,7 @@ class RemoteDataRepository(
             }
 
             val signatures = result.toolCalls.map { "${it.name}:${it.arguments.hashCode()}" }
-            if (isRepeatingToolCalls(recentSignatures, signatures)) {
+            if (com.inspiredandroid.kai.data.isRepeatingToolCalls(recentSignatures, signatures)) {
                 return AssistantTurn(strategy.bailout(visible, systemPrompt, BailoutReason.REPEATING))
             }
             recentSignatures.addAll(signatures)
@@ -1262,29 +1239,7 @@ class RemoteDataRepository(
                     ?: merged
             }
         }
-    }
-
-    /**
-     * Detects if the current batch of tool calls is repeating a recent pattern.
-     */
-    private fun isRepeatingToolCalls(recentSignatures: List<String>, currentSignatures: List<String>): Boolean {
-        if (currentSignatures.isEmpty()) return false
-        // Count how many consecutive times the same signature set appeared at the tail
-        val batchSize = currentSignatures.size
-        var consecutiveCount = 0
-        var i = recentSignatures.size - batchSize
-        while (i >= 0) {
-            val slice = recentSignatures.subList(i, i + batchSize)
-            if (slice == currentSignatures) {
-                consecutiveCount++
-                i -= batchSize
-            } else {
-                break
-            }
         }
-        // +1 for the current batch that's about to be executed
-        return consecutiveCount + 1 >= MAX_REPEATED_TOOL_CALLS
-    }
 
     /**
      * Makes a final OpenAI-compatible API call without tools, asking the model to summarize.
@@ -1353,8 +1308,8 @@ class RemoteDataRepository(
                 }.awaitAll()
             }
             val elapsed = Clock.System.now().toEpochMilliseconds() - startTime
-            if (elapsed < MIN_TOOL_DISPLAY_MS) {
-                delay((MIN_TOOL_DISPLAY_MS - elapsed).milliseconds)
+            if (elapsed < ChatLoopConstants.MIN_TOOL_DISPLAY_MS) {
+                delay((ChatLoopConstants.MIN_TOOL_DISPLAY_MS - elapsed).milliseconds)
             }
             return results
         } finally {
@@ -1388,109 +1343,6 @@ class RemoteDataRepository(
         throw lastException!!
     }
 
-    private fun estimateMessageChars(msg: com.inspiredandroid.kai.network.dtos.openaicompatible.OpenAICompatibleChatRequestDto.Message): Int {
-        val contentChars = when (val content = msg.content) {
-            is JsonArray -> {
-                // Vision messages: only count text parts, not base64 image data
-                content.sumOf { element ->
-                    val obj = element as? JsonObject
-                    val type = (obj?.get("type") as? JsonPrimitive)?.content
-                    if (type == "text") {
-                        (obj["text"] as? JsonPrimitive)?.content?.length ?: 0
-                    } else {
-                        100 // Fixed small cost for image references
-                    }
-                }
-            }
-
-            is JsonPrimitive -> content.content.length
-
-            else -> content?.toString()?.length ?: 0
-        }
-        return contentChars + msg.role.length
-    }
-
-    /**
-     * Trims messages to fit within the estimated context window by dropping oldest messages
-     * (keeping the system prompt and most recent messages).
-     */
-    private fun trimMessagesForContext(
-        messages: List<com.inspiredandroid.kai.network.dtos.openaicompatible.OpenAICompatibleChatRequestDto.Message>,
-        contextWindowTokens: Int = ModelCatalog.DEFAULT_CONTEXT_WINDOW_TOKENS,
-    ): List<com.inspiredandroid.kai.network.dtos.openaicompatible.OpenAICompatibleChatRequestDto.Message> {
-        val maxChars = contextWindowTokens * ESTIMATED_CHARS_PER_TOKEN
-        val totalChars = messages.sumOf { estimateMessageChars(it) }
-        if (totalChars <= maxChars) return messages
-
-        // Keep system prompt (first message if role is "system") and trim from oldest non-system
-        val systemMessages = messages.takeWhile { it.role == "system" }
-        val nonSystemMessages = messages.drop(systemMessages.size)
-
-        val systemChars = systemMessages.sumOf { estimateMessageChars(it) }
-        val availableChars = maxChars - systemChars
-
-        // Group each assistant tool-call turn together with the tool responses that follow it so
-        // trimming never strands one without the other. Strict OpenAI-compatible providers (e.g.
-        // DeepSeek via OpenCode Zen) reject an assistant `tool_calls` message that isn't followed
-        // by its tool responses, and a `tool` message without a preceding `tool_calls`.
-        val groups = mutableListOf<List<com.inspiredandroid.kai.network.dtos.openaicompatible.OpenAICompatibleChatRequestDto.Message>>()
-        var index = 0
-        while (index < nonSystemMessages.size) {
-            val msg = nonSystemMessages[index]
-            if (msg.role == "assistant" && !msg.tool_calls.isNullOrEmpty()) {
-                var end = index + 1
-                while (end < nonSystemMessages.size && nonSystemMessages[end].role == "tool") {
-                    end++
-                }
-                groups.add(nonSystemMessages.subList(index, end).toList())
-                index = end
-            } else {
-                groups.add(listOf(msg))
-                index++
-            }
-        }
-
-        // Keep whole groups from the end until we exceed the budget.
-        val kept = mutableListOf<com.inspiredandroid.kai.network.dtos.openaicompatible.OpenAICompatibleChatRequestDto.Message>()
-        var usedChars = 0
-        for (group in groups.asReversed()) {
-            val groupChars = group.sumOf { estimateMessageChars(it) }
-            if (usedChars + groupChars > availableChars) break
-            kept.addAll(0, group)
-            usedChars += groupChars
-        }
-
-        return systemMessages + kept
-    }
-
-    /**
-     * Trims History entries to fit within the estimated context window by dropping oldest messages
-     * (keeping the most recent). Used by Gemini and Anthropic tool loops where the system prompt
-     * is sent separately (not as a message).
-     */
-    private fun trimHistoryForContext(
-        history: List<History>,
-        systemPromptChars: Int = 0,
-        contextWindowTokens: Int = ModelCatalog.DEFAULT_CONTEXT_WINDOW_TOKENS,
-    ): List<History> {
-        val maxChars = contextWindowTokens * ESTIMATED_CHARS_PER_TOKEN
-        val totalChars = history.sumOf { it.content.length } + systemPromptChars
-        if (totalChars <= maxChars) return history
-
-        val availableChars = maxChars - systemPromptChars
-
-        // Keep messages from the end until we exceed the budget
-        val kept = mutableListOf<History>()
-        var usedChars = 0
-        for (msg in history.reversed()) {
-            val msgChars = msg.content.length
-            if (usedChars + msgChars > availableChars) break
-            kept.add(0, msg)
-            usedChars += msgChars
-        }
-
-        return kept
-    }
 
     /**
      * Compacts chat history by summarizing older messages via an LLM call when the history
@@ -1507,15 +1359,15 @@ class RemoteDataRepository(
         val history = chatHistory.value.filter { it.role != History.Role.TOOL_EXECUTING }
         val systemPromptChars = getActiveSystemPrompt()?.length ?: 0
         val totalChars = history.sumOf { it.content.length } + systemPromptChars
-        val maxChars = contextWindowTokens * ESTIMATED_CHARS_PER_TOKEN
-        if (totalChars <= (maxChars * COMPACTION_THRESHOLD).toInt()) return
+        val maxChars = contextWindowTokens * ChatLoopConstants.ESTIMATED_CHARS_PER_TOKEN
+        if (totalChars <= (maxChars * ChatLoopConstants.COMPACTION_THRESHOLD).toInt()) return
 
         // Split history: older messages to summarize, recent to keep verbatim
         val userIndices = history.mapIndexedNotNull { index, h ->
             if (h.role == History.Role.USER) index else null
         }
-        if (userIndices.size <= COMPACTION_KEEP_RECENT) return
-        val cutoffIndex = userIndices[userIndices.size - COMPACTION_KEEP_RECENT]
+        if (userIndices.size <= ChatLoopConstants.COMPACTION_KEEP_RECENT) return
+        val cutoffIndex = userIndices[userIndices.size - ChatLoopConstants.COMPACTION_KEEP_RECENT]
         val olderMessages = history.subList(0, cutoffIndex)
         val recentMessages = history.subList(cutoffIndex, history.size)
 

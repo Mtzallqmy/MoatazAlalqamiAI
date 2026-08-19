@@ -67,8 +67,23 @@ val appModule = module {
     single<ConversationStorage> {
         ConversationStorage(get(), createConversationPersistence(get()))
     }
+    single<com.inspiredandroid.kai.hotupdate.RemoteConfigService> {
+        com.inspiredandroid.kai.hotupdate.RemoteConfigService(
+            settings = get(),
+            currentAppVersion = com.inspiredandroid.kai.Version.appVersion,
+        )
+    }
+    single<com.inspiredandroid.kai.hotupdate.DynamicToolExecutor> {
+        com.inspiredandroid.kai.hotupdate.DynamicToolExecutor(
+            appSettings = get(),
+            chatToolExecutor = get(),
+        )
+    }
     single<ToolExecutor> {
-        ToolExecutor()
+        ToolExecutor(
+            dynamicToolProvider = { get<com.inspiredandroid.kai.hotupdate.RemoteConfigService>().dynamicTools() },
+            dynamicExecutor = { get<com.inspiredandroid.kai.hotupdate.DynamicToolExecutor>() },
+        )
     }
     single<MemoryStore> {
         MemoryStore(get())

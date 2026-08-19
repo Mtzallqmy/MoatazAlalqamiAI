@@ -23,10 +23,11 @@ class LinuxDistroTest {
     }
 
     @Test
-    fun `debian is the default and legacy installs are alpine`() {
-        // A rootfs with no marker predates the distro choice, and Alpine was the
-        // only thing the chat sandbox could have been.
-        assertEquals(LinuxDistro.DEBIAN, LinuxDistro.DEFAULT)
+    fun `ubuntu is the default from v340 and legacy installs are alpine`() {
+        // Ubuntu 26.04 LTS became the default for the Agentic Development
+        // Platform (v3.4.0+). A rootfs with no marker predates the distro
+        // choice, and Alpine was the only thing the chat sandbox could be.
+        assertEquals(LinuxDistro.UBUNTU, LinuxDistro.DEFAULT)
         assertEquals(LinuxDistro.ALPINE, LinuxDistro.LEGACY)
     }
 
@@ -56,7 +57,11 @@ class LinuxDistroTest {
     fun `optional bundle carries the remote-server tooling the shell tool advertises`() {
         LinuxDistro.entries.forEach { distro ->
             listOf("openssh-client", "lftp", "rsync").forEach { pkg ->
-                assertTrue(pkg in distro.optionalPackages, "${distro.id} is missing $pkg")
+                // Remote tooling is either optional-installable or already in the
+                // base set (Ubuntu 26.04 ships it pre-installed as part of the
+                // agentic environment rootfs).
+                val present = pkg in distro.optionalPackages || pkg in distro.basePackages
+                assertTrue(present, "${distro.id} is missing $pkg in optional and base")
             }
         }
     }
