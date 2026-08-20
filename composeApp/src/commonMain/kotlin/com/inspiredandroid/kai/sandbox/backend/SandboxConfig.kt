@@ -35,10 +35,12 @@ enum class NetworkPolicy {
 
 /**
  * Full configuration handed to [SandboxBackend.create]. Reasonable defaults
- * make it one-line-friendly for the orchestrator.
+ * make it one-line-friendly for the orchestrator. The distro follows the app's
+ * single production default so the agent backend and the user terminal do not
+ * silently request different Linux environments.
  */
 data class SandboxConfig(
-    val distro: LinuxDistro = LinuxDistro.UBUNTU,
+    val distro: LinuxDistro = LinuxDistro.DEFAULT,
     val resourceProfile: ResourceProfile = ResourceProfile.STANDARD,
     val networkPolicy: NetworkPolicy = NetworkPolicy.DEVELOPER,
     val workspaceRoot: String = "/workspace",
