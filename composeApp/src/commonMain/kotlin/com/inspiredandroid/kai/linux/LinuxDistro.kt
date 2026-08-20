@@ -26,19 +26,17 @@ enum class LinuxDistro(
      */
     DEBIAN(
         id = "debian",
-        displayName = "Debian 12",
+        displayName = "Debian 13",
         basePackages = listOf(
             "bash", "ca-certificates", "curl", "wget", "git",
-            "nano", "less", "unzip", "python3", "tar", "coreutils",
+            "nano", "less", "unzip", "python3", "tar", "xz-utils", "coreutils",
+            "procps", "jq", "ripgrep", "openssh-client", "rsync", "file",
         ),
         optionalPackages = listOf(
-            "jq",
             "nodejs",
             "npm",
             "python3-pip",
-            "openssh-client",
             "lftp",
-            "rsync",
         ),
         packageManager = AptPackageManager,
     ),
@@ -108,7 +106,7 @@ enum class LinuxDistro(
          * Ubuntu 26.04 LTS is the default for the Agentic Development Platform
          * (v3.4.0+); Kai Build still uses [DEBIAN] for compatibility.
          */
-        val DEFAULT = UBUNTU
+        val DEFAULT = DEBIAN
 
         /**
          * Installs made before the distro was recorded are Alpine — that was the

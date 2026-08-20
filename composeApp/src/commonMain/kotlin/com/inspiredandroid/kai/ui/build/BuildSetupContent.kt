@@ -49,9 +49,11 @@ internal fun BuildSetupContent(
     onToggleAgent: (String) -> Unit,
     onInstall: () -> Unit,
     onCancel: () -> Unit,
+    onRepair: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val installing = state.environment as? BuildEnvironmentState.Installing
+    val runtimeError = state.environment as? BuildEnvironmentState.Error
 
     Column(
         modifier = modifier
@@ -134,16 +136,28 @@ internal fun BuildSetupContent(
             }
         }
 
-        if (installing != null) {
+        if (installing != null || state.environment is BuildEnvironmentState.Repairing || state.environment is BuildEnvironmentState.HealthChecking) {
             SandboxProgressRow(
-                progress = installing.progress,
-                statusText = stepLabel(installing),
+                progress = installing?.progress,
+                statusText = when (state.environment) {
+                    is BuildEnvironmentState.Repairing -> "Repairing Moataz Runtime…"
+                    is BuildEnvironmentState.HealthChecking -> "Checking Moataz Runtime…"
+                    else -> stepLabel(requireNotNull(installing))
+                },
                 onCancel = onCancel,
             )
         } else {
-            Button(onClick = onInstall, modifier = Modifier.handCursor()) {
-                Text(stringResource(Res.string.kai_build_setup_install))
+            if (runtimeError != null && runtimeError.recoverable) {
+                Button(onClick = onRepair, modifier = Modifier.handCursor()) { Text("Repair") }
             }
+            Button(onClick = onInstall, modifier = Modifier.handCursor()) {
+                Text(if (runtimeError == null) stringResource(Res.string.kai_build_setup_install) else "Reinstall runtime")
+            }
+        }
+
+        runtimeError?.let {
+            Text(it.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
+            Text(it.technicalDetail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
         state.lastError?.let { error ->

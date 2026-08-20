@@ -23,11 +23,9 @@ class LinuxDistroTest {
     }
 
     @Test
-    fun `ubuntu is the default from v340 and legacy installs are alpine`() {
-        // Ubuntu 26.04 LTS became the default for the Agentic Development
-        // Platform (v3.4.0+). A rootfs with no marker predates the distro
-        // choice, and Alpine was the only thing the chat sandbox could be.
-        assertEquals(LinuxDistro.UBUNTU, LinuxDistro.DEFAULT)
+    fun `debian 13 is the production default and legacy installs remain alpine`() {
+        assertEquals(LinuxDistro.DEBIAN, LinuxDistro.DEFAULT)
+        assertEquals("Debian 13", LinuxDistro.DEBIAN.displayName)
         assertEquals(LinuxDistro.ALPINE, LinuxDistro.LEGACY)
     }
 
@@ -79,7 +77,7 @@ class LinuxDistroTest {
     fun `debian base carries what the coding-agent installers need`() {
         // tar: OpenCode's installer extracts a .tar.gz. coreutils: Claude's checks
         // a sha256sum. ca-certificates/curl: every vendor script is a curl | bash.
-        listOf("tar", "coreutils", "ca-certificates", "curl", "python3").forEach {
+        listOf("tar", "xz-utils", "coreutils", "ca-certificates", "curl", "python3", "procps", "jq", "ripgrep", "openssh-client", "rsync", "file").forEach {
             assertTrue(it in LinuxDistro.DEBIAN.basePackages, "Debian base is missing $it")
         }
     }

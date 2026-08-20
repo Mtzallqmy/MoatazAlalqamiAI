@@ -18,14 +18,22 @@ import com.inspiredandroid.kai.build.terminal.MIN_COLUMNS
 import com.inspiredandroid.kai.build.terminal.MIN_ROWS
 import com.inspiredandroid.kai.build.terminal.TerminalScreen
 import com.inspiredandroid.kai.build.terminal.TerminalSnapshot
+import com.inspiredandroid.kai.cli.CliCommandResult
+import com.inspiredandroid.kai.cli.CliCommandRunner
+import com.inspiredandroid.kai.cli.CliInstaller
+import com.inspiredandroid.kai.cli.CliStatus
 import com.inspiredandroid.kai.linux.DEFAULT_GUEST_PATH
 import com.inspiredandroid.kai.linux.DebianSpec
+import com.inspiredandroid.kai.linux.EnvironmentDoctor
+import com.inspiredandroid.kai.linux.EnvironmentRepairExecutor
 import com.inspiredandroid.kai.linux.InstallStep
 import com.inspiredandroid.kai.linux.LinuxDistro
 import com.inspiredandroid.kai.linux.LinuxInstaller
 import com.inspiredandroid.kai.linux.LinuxPaths
 import com.inspiredandroid.kai.linux.ProotHandle
 import com.inspiredandroid.kai.linux.ProotLauncher
+import com.inspiredandroid.kai.runtime.EnvironmentRepairPlanner
+import com.inspiredandroid.kai.runtime.MoatazRuntimeContract
 import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toImmutableList
@@ -286,6 +294,16 @@ class BuildEnvironmentManager(
 
     fun refresh() {
         scope.launch { sync() }
+    }
+
+    fun repair() {
+        if (installJob?.isActive == true) return
+        installJob = scope.launch {
+            _state.update { it.copy(environment = BuildEnvironmentState.Repairing, lastError = null) }
+            val health = EnvironmentDoctor(paths).diagnose()
+            val result = EnvironmentRepairExecutor(paths).execute(EnvironmentRepairPlanner.plan(health))
+            sync(result.detail)
+        }
     }
 
     fun createProject(name: String): String? {
@@ -574,10 +592,9 @@ class BuildEnvironmentManager(
             onEnvironmentChanged?.invoke()
         }
 
-        // Auto-install agents (OpenCode) are always installed right after Debian,
-        // so the user never has to tick them — they are part of the fresh system.
-        val autoIds = BuildAgents.autoInstallAgents.map { it.id }.toSet()
-        val allAgentIds = (agentIds + autoIds).mapNotNull { BuildAgents.get(it) }
+        // Third-party developer CLIs are opt-in; none is silently installed with
+        // the runtime. Definitions and installers live in the generic registry.
+        val allAgentIds = agentIds.mapNotNull { BuildAgents.get(it) }
         val failed = mutableListOf<String>()
         for (agent in allAgentIds) {
             if (!isActive()) throw CancellationException()
@@ -607,25 +624,27 @@ class BuildEnvironmentManager(
             timeoutSeconds = 30,
         )
 
-        // If the binary is already present (e.g. from a pre-bootstrapped rootfs
-        // that ships OpenCode), skip the download entirely.
+        // If the binary is already present, skip installation and keep its real
+        // version/detection state.
         val alreadyInstalled = executor.ensureAgentBinary(agent.binary)
         if (alreadyInstalled) {
-            Log.i(TAG, "${agent.id} already installed (pre-bootstrapped rootfs), skipping download")
+            Log.i(TAG, "${agent.id} already installed, skipping download")
             return@withLock true
         }
 
-        // Primary URL first; when it fails, fall back to mirrors in order.
-        // Each fallback is tried with a backoff so a flaky mobile connection gets
-        // a second chance before giving up on that mirror.
-        val urls = listOf(agent.installCommand) + agent.fallbackUrls
-        val result = executor.executeWithRetry(urls, timeoutSeconds = 900, maxAttempts = 2)
-        // Vendor scripts may leave the binary only in their private dir and only
-        // update shell rc files — which Kai Build never sources. Link into PATH
-        // and re-probe so a successful download still counts as installed.
-        val installed = executor.ensureAgentBinary(agent.binary)
+        val runner = CliCommandRunner { command ->
+            val result = executor.execute(command, timeoutSeconds = 900)
+            CliCommandResult(result.exitCode, result.stdout, result.stderr.ifBlank { result.error.orEmpty() })
+        }
+        val status = CliInstaller(
+            runner = runner,
+            allowedScriptHosts = setOf("claude.ai", "opencode.ai", "x.ai"),
+        ).install(agent.definition)
+        // Vendor scripts may leave the binary in their private directory. Link
+        // it into the shared PATH only after the installer and version probe.
+        val installed = status is CliStatus.Ready && executor.ensureAgentBinary(agent.binary)
         if (!installed) {
-            Log.w(TAG, "${agent.id} install failed (exit detail): ${result.failureDetail()}")
+            Log.w(TAG, "${agent.id} install failed: $status")
             val probe = executor.execute(
                 "command -v ${agent.binary} 2>/dev/null; " +
                     "ls -la /root/.local/bin /root/.grok/bin /root/.opencode/bin /usr/local/bin 2>/dev/null; " +
@@ -714,7 +733,7 @@ class BuildEnvironmentManager(
             // only overwrite a resize that landed while the shell was starting.
             val handle = executor(columns = cols, rows = rows, session = session).executeStreaming(
                 command = launch,
-                workingDir = "/root/projects/${session.project}",
+                workingDir = "${MoatazRuntimeContract.workspaceRoot}/${session.project}",
                 // Runs on the PTY reader thread: keep it to parsing, and let the
                 // repaint pump do the snapshotting and publishing on its own clock.
                 onOutput = { buf, n ->
@@ -764,9 +783,9 @@ class BuildEnvironmentManager(
     private fun ensureAgentPathProfile() {
         val dir = File(paths.rootfsDir, "etc/profile.d")
         dir.mkdirs()
-        File(dir, "kai-build-path.sh").writeText(
+        File(dir, "moataz-runtime.sh").writeText(
             """
-            |# Managed by Kai Build — keep coding-agent CLIs on PATH for login shells.
+            |# Managed by Moataz Runtime — one PATH contract for shells and developer CLIs.
             |export PATH="/root/.local/bin:/root/.grok/bin:/root/.opencode/bin${'$'}{PATH:+:${'$'}PATH}"
             |
             """.trimMargin(),
@@ -899,16 +918,43 @@ class BuildEnvironmentManager(
     private fun sync(error: String? = null) {
         // Debian only: an Alpine chat sandbox cannot host the agents, and Kai Build
         // then installs its own Debian somewhere else.
-        val ready = paths.readMarker()?.distro == LinuxDistro.DEBIAN && File(paths.prootPath).canExecute()
+        val marker = paths.readMarker()
+        if (marker == null) {
+            _state.update {
+                it.copy(
+                    environment = BuildEnvironmentState.NotInstalled,
+                    installedAgents = persistentSetOf(),
+                    projects = scanProjects(),
+                    systemInfo = null,
+                    lastError = error,
+                )
+            }
+            return
+        }
+        _state.update { it.copy(environment = BuildEnvironmentState.HealthChecking, lastError = null) }
+        val health = EnvironmentDoctor(paths).diagnose()
+        val ready = marker.distro == LinuxDistro.DEBIAN && health.isReady
+        val healthError = health.issues.firstOrNull()
         _state.update {
             it.copy(
-                environment = if (ready) BuildEnvironmentState.Ready else BuildEnvironmentState.NotInstalled,
+                environment = if (ready) {
+                    BuildEnvironmentState.Ready
+                } else {
+                    BuildEnvironmentState.Error(
+                        code = healthError?.code ?: "wrong_runtime",
+                        title = "Moataz Runtime needs attention",
+                        technicalDetail = health.issues.joinToString("\n") { issue -> "${issue.code}: ${issue.detail}" }
+                            .ifBlank { "Installed runtime is not Debian 13 arm64" },
+                        recoverable = health.issues.all { issue -> issue.repairable },
+                        recommendedAction = if (health.issues.all { issue -> issue.repairable }) "Repair" else "Reinstall runtime",
+                    )
+                },
                 installedAgents = if (ready) guessAgents() else persistentSetOf(),
                 projects = scanProjects(),
                 // Keep the card's numbers up while they are re-measured; an
                 // uninstalled system has none to keep.
                 systemInfo = if (ready) it.systemInfo else null,
-                lastError = error,
+                lastError = error ?: healthError?.detail,
             )
         }
         if (!ready) return
@@ -1000,7 +1046,10 @@ class BuildEnvironmentManager(
                 // /root itself stays on the rootfs so agent binaries under the
                 // vendor install dirs are executable — external storage is often
                 // mounted noexec.
-                binds = listOf(paths.projectsDir.absolutePath to "/root/projects"),
+                binds = listOf(
+                    paths.projectsDir.absolutePath to MoatazRuntimeContract.workspaceRoot,
+                    paths.projectsDir.absolutePath to MoatazRuntimeContract.legacyProjectsRoot,
+                ),
                 extraArgs = DebianSpec.prootArgs,
                 env = DebianSpec.env + agentEnv(columns, rows, openUrlPath),
             ),

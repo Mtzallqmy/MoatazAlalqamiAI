@@ -11,7 +11,7 @@ Moataz Alalqami AI Agent is an **Agentic Development Platform** that runs AI age
 
 | Backend | Environment | Purpose |
 |---|---|---|
-| `LocalProotSandboxBackend` | Ubuntu 26.04 LTS via PRoot on-device | Offline development, light tasks |
+| `LocalProotSandboxBackend` | Debian 13 Trixie arm64 via PRoot on-device | Offline development, light tasks |
 | `RemoteSandboxBackend` | Ubuntu 26.04 VM via Incus on server | Heavy builds, long-running servers, cross-platform |
 
 The agent does not know which backend it is using — both expose the same API.
@@ -38,7 +38,7 @@ The agent does not know which backend it is using — both expose the same API.
        │           │            │     ┌────────┴─────────┐
        │           │            │     │                  │
        └───────────┴────────────┘     ▼                  ▼
-                   │             Local Ubuntu       RemoteSandbox
+                   │             Local Debian 13       RemoteSandbox
                    │                 PRoot             Backend
                    │                  │                  │
               Local Models       Android          HTTPS/WebSocket
@@ -165,7 +165,7 @@ interface SandboxBackend {
 **SandboxConfig:**
 ```kotlin
 data class SandboxConfig(
-    val distro: LinuxDistro = LinuxDistro.UBUNTU,
+    val distro: LinuxDistro = LinuxDistro.DEBIAN,
     val resourceProfile: ResourceProfile = ResourceProfile.STANDARD,
     val networkPolicy: NetworkPolicy = NetworkPolicy.DEVELOPER,
     val workspaceRoot: String = "/workspace",
@@ -207,7 +207,7 @@ Wraps existing components without parallel implementation:
 | `SandboxFiles` | File operations |
 | `LinuxInstaller` | Rootfs extraction/installation |
 
-**Supported distros:** Ubuntu 26.04 LTS (default), Debian 12 (legacy), Alpine 3.19 (legacy)
+**Production local runtime:** Debian 13 Trixie arm64. Ubuntu and Alpine are compatibility-only.
 
 ---
 
@@ -430,7 +430,7 @@ SandboxError (sealed)
 
 ```kotlin
 object FeatureFlags {
-    val ubuntuLocalEnabled: Boolean = true       // Ubuntu 26.04 via PRoot
+    val localRuntimeEnabled: Boolean = true      // Debian 13 Trixie arm64 via PRoot
     val remoteSandboxEnabled: Boolean = true     // Remote VM support
     val incusProviderEnabled: Boolean = true     // Incus as provider
     val remotePreviewEnabled: Boolean = true     // Preview via gateway proxy
@@ -444,8 +444,8 @@ object FeatureFlags {
 
 | Mode | Behavior |
 |---|---|
-| **Auto** | Remote VM available → Use Remote; else Local Ubuntu available → Use Local; else show setup requirement |
-| **Local Ubuntu** | Force local PRoot Ubuntu 26.04 |
+| **Auto** | Remote VM available → Use Remote; else Local Debian 13 available → Use Local; else show setup requirement |
+| **Local Debian 13** | Force local PRoot Debian 13 Trixie arm64 |
 | **Remote Ubuntu VM** | Force remote Incus VM (error if gateway not configured) |
 
 ---
@@ -482,7 +482,7 @@ The user can then open: **Chat**, **Terminal**, **Files**, **Git**, **Preview**,
 
 | Item | Approach |
 |---|---|
-| Debian 12 installs | Keep, offer "Migrate to Ubuntu" button |
+| Debian 12 installs | Detect as degraded; offer repair-safe migration to Debian 13 |
 | Alpine 3.19 installs | Keep, offer "Migrate to Ubuntu" button |
 | Existing conversations | No migration needed (backend-agnostic) |
 | Existing APK builds | Preserve, mark as deprecated |
@@ -501,7 +501,7 @@ The user can then open: **Chat**, **Terminal**, **Files**, **Git**, **Preview**,
 - ❌ Plaintext secrets
 - ❌ Ubuntu rootfs in APK (too large — download from GitHub Releases)
 - ❌ Large AI models in APK
-- ❌ Describing PRoot as "VM" (call it "Local Ubuntu Environment")
+- ❌ Describing PRoot as "VM" (call it "Local Debian 13 Environment")
 - ❌ Deleting user data during migration
 - ❌ Disabling tests to pass CI
 - ❌ Mocks to claim Remote Sandbox works
@@ -523,11 +523,11 @@ The full architecture described above is implemented on `feature/ai-gateway-hard
 | 7. RemoteSandboxBackend | Done | `sandbox/remote/RemoteSandboxBackend.kt` — Ktor client over gateway protocol |
 | 8. Sandbox Provider | Done | `sandbox/remote/SandboxProvider.kt` — Incus-ready VM lifecycle |
 | 9. Gateway protocol | Done | `docs/SANDBOX_GATEWAY_PROTOCOL.md` |
-| 10. Ubuntu 26.04 default | Done | `linux/LinuxDistro.kt` UBUNTU default + rootfs asset in v3.4.0 release |
+| 10. Debian 13 production default | Done | `linux/LinuxDistro.kt` Debian default + verified arm64 rootfs asset |
 | 11. Chat-integrated terminal | Done | `chat/composables/TerminalPanel.kt` + `WorkspacePanel.kt` |
 | 12. Secrets hardening | Done | `security/SecretStore.kt` — keystore-backed, no legacy keys |
 | 13. Redaction + cancellation safety | Done | `logging/` + CancellationException guards (10 sites) |
 | 14. OpenAI Compatible UI | Done | `settings/ServicesSettings.kt` — presets, model refresh, count |
 | 15. Tests | Done | 927 unit tests passing (0 failures) |
 
-Release history: v3.4.0 added Ubuntu 26.04 LTS rootfs (arm64) with embedded OpenCode; v3.5.0 adds the full agentic stack (orchestrator, tool runtime, sandbox backends, audit log).
+Current architecture supersedes the earlier Ubuntu-local experiment: the production on-device contract is Debian 13 Trixie arm64. Remote sandbox providers may continue using their own Ubuntu VM images.

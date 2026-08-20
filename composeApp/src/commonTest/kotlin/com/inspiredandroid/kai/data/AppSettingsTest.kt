@@ -1,5 +1,7 @@
 package com.inspiredandroid.kai.data
 
+import com.inspiredandroid.kai.terminal.config.TerminalProfile
+import com.inspiredandroid.kai.terminal.config.TerminalProfileStore
 import com.russhwolf.settings.MapSettings
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -7,6 +9,24 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AppSettingsTest {
+
+    @Test
+    fun `custom terminal profiles persist with a versioned schema`() {
+        val backing = MapSettings()
+        val first = AppSettings(backing)
+        val profile = TerminalProfile(
+            id = "custom-aider",
+            title = "aider",
+            command = "aider",
+            cwd = "/workspace",
+            isCustom = true,
+        )
+        first.setTerminalProfileStore(TerminalProfileStore(customProfiles = listOf(profile)))
+
+        val restored = AppSettings(backing).getTerminalProfileStore()
+        assertEquals(TerminalProfileStore.CURRENT_SCHEMA, restored.schemaVersion)
+        assertEquals(profile, restored.customProfiles.single())
+    }
 
     @Test
     fun `migration only runs once so deleted services stay deleted`() {

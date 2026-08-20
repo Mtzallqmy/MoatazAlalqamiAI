@@ -34,7 +34,7 @@ Requirements:
 ## Lightpanda facts (from docs/LIGHTPANDA_RESEARCH.md)
 - AGPL-3.0; binary-only use via separate process (CDP ws:9222 or MCP-over-HTTP 9223) = safe, no conveying.
 - MCP-HTTP: POST /mcp JSON-RPC 2.0; Mcp-Session-Id header gives per-agent session isolation.
-- Nightly binary: lightpanda-aarch64-linux (glibc) → runs in Ubuntu 26.04 PRoot sandbox of our app!
+- Nightly binary: lightpanda-aarch64-linux (glibc); validate it against the Debian 13 Trixie production runtime before enabling it.
 - `--dump markdown` + `--obey-robots`.
 
 ## Design decisions

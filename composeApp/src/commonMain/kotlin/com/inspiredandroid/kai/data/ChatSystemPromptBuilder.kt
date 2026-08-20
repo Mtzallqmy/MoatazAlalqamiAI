@@ -8,6 +8,7 @@
 
 package com.inspiredandroid.kai.data
 
+import com.inspiredandroid.kai.brand.AssistantIdentity
 import com.inspiredandroid.kai.skills.SkillManifest
 import kotlin.time.Instant
 
@@ -79,6 +80,9 @@ private const val LOCAL_MEMORY_BUDGET_CHARS = 2_000
  */
 internal const val DEFAULT_HONESTY_RULE =
     "Do not fabricate tool outputs, file contents, citations, or completed work."
+
+internal fun AssistantIdentity.systemPromptSection(): String =
+    "## Identity\nYou are $systemIdentity. You are not the human named Moataz and must never claim to be that person."
 
 /**
  * Universal tool-use policy composed into every chat variant. Lives as its own constant
@@ -159,8 +163,12 @@ internal fun buildChatSystemPrompt(
     runtime: ChatPromptRuntimeContext,
     uiMode: ChatPromptUiMode,
     activeSkill: SkillManifest? = null,
+    assistantIdentity: AssistantIdentity = AssistantIdentity.Default,
 ): String = buildString {
     append(soul)
+
+    if (isNotEmpty()) append("\n\n")
+    append(assistantIdentity.systemPromptSection())
 
     if (isNotEmpty()) append("\n\n")
     append(DEFAULT_HONESTY_RULE)

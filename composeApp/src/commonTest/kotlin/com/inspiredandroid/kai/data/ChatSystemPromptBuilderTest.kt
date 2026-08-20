@@ -54,7 +54,7 @@ class ChatSystemPromptBuilderTest {
 
     private fun build(
         variant: SystemPromptVariant,
-        soul: String = "You are Kai.",
+        soul: String = "You are Moataz AI assistant.",
         hasTools: Boolean = true,
         memoryEnabled: Boolean = true,
         schedulingEnabled: Boolean = true,
@@ -124,7 +124,7 @@ class ChatSystemPromptBuilderTest {
     @Test
     fun `CHAT_REMOTE default emits soul + Structured Learning + Automation + context`() {
         val out = build(SystemPromptVariant.CHAT_REMOTE)
-        assertTrue(out.startsWith("You are Kai."))
+        assertTrue(out.startsWith("You are Moataz AI assistant."))
         assertTrue("## Structured Learning" in out)
         assertTrue("## Automation" in out)
         assertTrue("## Context" in out)
@@ -233,6 +233,7 @@ class ChatSystemPromptBuilderTest {
             schedulingEnabled = false,
         )
         val expected = "You're a personal assistant.\n\n" +
+            com.inspiredandroid.kai.brand.AssistantIdentity.Default.systemPromptSection() + "\n\n" +
             DEFAULT_HONESTY_RULE + "\n\n" +
             DEFAULT_ACTING_SECTION + "\n\n" +
             "## Context\n" +
@@ -416,7 +417,7 @@ class ChatSystemPromptBuilderTest {
     @Test
     fun `CHAT_LOCAL default emits only soul + context`() {
         val out = build(SystemPromptVariant.CHAT_LOCAL)
-        assertTrue(out.startsWith("You are Kai."))
+        assertTrue(out.startsWith("You are Moataz AI assistant."))
         assertTrue("## Context" in out)
         assertFalse("## Structured Learning" in out)
     }
@@ -594,12 +595,13 @@ class ChatSystemPromptBuilderTest {
         // sections are verified as omitted below.
         val out = build(
             variant = SystemPromptVariant.CHAT_LOCAL,
-            soul = "You are Kai, a helpful assistant.",
+            soul = "You are Moataz AI assistant.",
             memoryInstructions = "Save user preferences with memory_store.",
             pendingTasks = listOf(task(description = "ignored task")),
             uiMode = ChatPromptUiMode.DYNAMIC_UI,
         )
-        val expected = "You are Kai, a helpful assistant.\n\n" +
+        val expected = "You are Moataz AI assistant.\n\n" +
+            com.inspiredandroid.kai.brand.AssistantIdentity.Default.systemPromptSection() + "\n\n" +
             DEFAULT_HONESTY_RULE + "\n\n" +
             DEFAULT_TOOL_USE_SECTION + "\n\n" +
             DEFAULT_ACTING_SECTION + "\n\n" +
@@ -617,7 +619,7 @@ class ChatSystemPromptBuilderTest {
     fun `golden CHAT_REMOTE with every section enabled`() {
         val out = build(
             variant = SystemPromptVariant.CHAT_REMOTE,
-            soul = "You are Kai.",
+            soul = "You are Moataz AI assistant.",
             memoryInstructions = "Basic memory guidance.",
             generalMemories = listOf(memory("fact", "value")),
             preferenceMemories = listOf(memory("pref", "val", category = MemoryCategory.PREFERENCE)),
@@ -646,7 +648,8 @@ class ChatSystemPromptBuilderTest {
         // Just assert the section headers are present in order — the full kai-ui sections
         // are verified by separate DYNAMIC_UI / INTERACTIVE_UI tests.
         val headerOrder = listOf(
-            "You are Kai.",
+            "You are Moataz AI assistant.",
+            "## Identity",
             DEFAULT_HONESTY_RULE,
             "## Tool Use",
             "## When to Act",
