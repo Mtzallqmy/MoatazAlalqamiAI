@@ -31,34 +31,14 @@ private const val HOME_EXTERNAL = "external"
  */
 data class InstallMarker(
     val distro: LinuxDistro,
-    /**
-     * True when `/root` lives on the rootfs (executable, which agent binaries
-     * need). False is the pre-unification chat layout, where `/root` was bound
-     * to external app storage — kept as-is for installs that already have it.
-     */
     val homeOnRootfs: Boolean,
 )
 
-/**
- * Storage layout for one Linux install. The chat sandbox and Kai Build each
- * point one of these at their own directory — or at the *same* directory, which
- * is how a Debian chat sandbox and Kai Build end up sharing a single rootfs.
- *
- * Directory names are deliberately unchanged from before the two stacks merged,
- * so existing installs are found rather than orphaned and `file_paths.xml` keeps
- * working.
- */
+/** Storage layout for one Linux install. */
 class LinuxPaths(
     context: Context,
     dirName: String,
-    /** Adopted when a rootfs predates markers. */
     private val legacyMarker: InstallMarker,
-    /**
-     * Path under [root] whose presence proves a marker-less install *finished*.
-     * "A rootfs directory exists" is not enough: an install in progress has one
-     * too, and adopting a legacy marker over a half-extracted Debian would
-     * record it as a complete Alpine.
-     */
     private val legacyEvidence: String,
 ) {
     private val storedAppContext: Context = context.applicationContext
@@ -82,10 +62,6 @@ class LinuxPaths(
     /** proot resolves `libtalloc.so.2` relative to this. */
     val libDir: String get() = root.absolutePath
 
-    /**
-     * The pre-unification chat home. Still bound to `/root` for installs that
-     * recorded [InstallMarker.homeOnRootfs] as false.
-     */
     private val legacyExternalHome: File by lazy {
         val external = appContext.getExternalFilesDir(null)
         val target = if (external != null) File(external, "sandbox-home") else File(root, "home")
@@ -93,17 +69,11 @@ class LinuxPaths(
         target
     }
 
-    /**
-     * Bound to `/root/projects`. Lives in external app files so project code stays
-     * USB/MTP reachable, and is shared by whichever Debian exists so switching the
-     * chat sandbox's distro never strands a project.
-     */
     val projectsDir: File by lazy {
         val external = appContext.getExternalFilesDir(null) ?: root
         File(external, "kai-build-home/projects")
     }
 
-    /** Host directory backing `/root` for this install. */
     fun homeDir(marker: InstallMarker): File = if (marker.homeOnRootfs) File(rootfsDir, "root") else legacyExternalHome
 
     fun ensureLayout() {
@@ -117,6 +87,35 @@ class LinuxPaths(
     }
 
     /**
+     * Fail early with a useful diagnostic when the APK is missing one of the
+     * native pieces PRoot needs. Previously only libproot.so was checked, so a
+     * missing loader or talloc looked like a Linux/rootfs hang later.
+     */
+    fun validateNativeRuntime() {
+        ensureLayout()
+        val required = listOf(
+            "libproot.so" to true,
+            "libproot-loader.so" to false,
+            "libtalloc.so" to false,
+        )
+        val failures = required.mapNotNull { (name, mustExecute) ->
+            val file = File(nativeLibDir, name)
+            when {
+                !file.isFile || file.length() == 0L -> "$name missing"
+                mustExecute && !file.canExecute() -> "$name is not executable"
+                else -> null
+            }
+        }
+        check(failures.isEmpty()) {
+            "Invalid arm64 PRoot runtime in $nativeLibDir: ${failures.joinToString()}"
+        }
+        copyLibtalloc()
+        check(tallocTarget.isFile && tallocTarget.length() > 0L) {
+            "Failed to prepare libtalloc.so.2 in ${root.absolutePath}"
+        }
+    }
+
+    /**
      * Android strips the `.so.2` suffix from jniLibs, so proot cannot find the
      * soname it was linked against until we put a correctly named copy somewhere
      * on its library path.
@@ -127,11 +126,6 @@ class LinuxPaths(
         if (source.exists()) source.copyTo(tallocTarget, overwrite = true)
     }
 
-    /**
-     * The install on disk, or null when there is none. Adopts and persists the
-     * legacy marker for installs made before markers existed, so every caller
-     * downstream sees one shape.
-     */
     fun readMarker(): InstallMarker? {
         if (!rootfsDir.isDirectory) return null
         parseMarker()?.let { return it }
@@ -173,11 +167,6 @@ class LinuxPaths(
     }
 
     companion object {
-        /**
-         * The chat sandbox's install. It never wrote a completion file, so a
-         * marker-less rootfs is recognised as a finished pre-unification Alpine
-         * by Alpine's own release file.
-         */
         fun forSandbox(context: Context) = LinuxPaths(
             context = context,
             dirName = SANDBOX_DIR_NAME,
@@ -185,7 +174,6 @@ class LinuxPaths(
             legacyEvidence = ALPINE_RELEASE_FILE,
         )
 
-        /** Kai Build's own install, used only when the chat sandbox is not Debian. */
         fun forBuild(context: Context) = LinuxPaths(
             context = context,
             dirName = BUILD_DIR_NAME,
