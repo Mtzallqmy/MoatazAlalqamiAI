@@ -7,7 +7,6 @@ import java.net.URL
 
 // Cap at 3.22: Alpine 3.23+ ships apk-tools 3, which uses execveat() in a way
 // proot does not support, so `apk update` fails under the sandbox runtime.
-// See termux/proot-distro#532 / #595.
 private const val ALPINE_VERSION = "3.22.5"
 private const val ALPINE_BRANCH = "v3.22"
 
@@ -30,28 +29,12 @@ private const val DEBIAN_RELEASE = "trixie"
  * which proot flags and environment the distro's own tooling depends on.
  */
 sealed interface DistroSpec {
-
     val distro: LinuxDistro
-
-    /** This device's ABI in the distro's own architecture vocabulary. */
     fun arch(): String
-
-    /** File name for the downloaded archive — the extension picks the decompressor. */
     val archiveName: String
-
-    /**
-     * Candidate download URLs, best first. May hit the network to resolve an
-     * index, so call it off the main thread.
-     */
     fun rootfsUrls(): List<String>
-
-    /** Post-extraction fixes that must land before the first proot run. */
     fun configure(rootfsDir: File)
-
-    /** proot flags this distro cannot work without. */
     val prootArgs: List<String> get() = emptyList()
-
-    /** Environment every command in this distro should see. */
     val env: Map<String, String> get() = emptyMap()
 
     companion object {
@@ -64,9 +47,7 @@ sealed interface DistroSpec {
 }
 
 object AlpineSpec : DistroSpec {
-
     override val distro = LinuxDistro.ALPINE
-
     override val archiveName = "rootfs.tar.gz"
 
     override fun arch(): String {
@@ -93,11 +74,6 @@ object AlpineSpec : DistroSpec {
         writeRepositories(rootfsDir, ALPINE_MIRRORS.first())
     }
 
-    /**
-     * `apk update` is the first thing that has to work, and a mirror can be
-     * unreachable even when the one that served the rootfs was fine. The
-     * installer walks these, rewriting `repositories` each time.
-     */
     val mirrors: List<String> = ALPINE_MIRRORS
 
     fun writeRepositories(rootfsDir: File, mirrorBase: String) {
@@ -110,9 +86,7 @@ object AlpineSpec : DistroSpec {
 }
 
 object DebianSpec : DistroSpec {
-
     override val distro = LinuxDistro.DEBIAN
-
     override val archiveName = "rootfs.tar.xz"
 
     override fun arch(): String {
@@ -127,13 +101,10 @@ object DebianSpec : DistroSpec {
     }
 
     /**
-     * Newest Debian 13 (trixie) image for this device architecture.
-     *
-     * Resolution order for arm64 devices:
-     * 1. The v4.2.0 production rootfs release asset, pre-installed with the
-     *    lightweight CLI base and OpenCode.
-     * 2. LXC index for the newest trixie default image.
-     * 3. A recent LXC image as a last-resort fallback when the index is offline.
+     * Debian 13 (trixie) resolution order:
+     * 1. v4.2.0 production arm64 asset, pre-installed with CLI tools + OpenCode.
+     * 2. newest trixie image from the Linux Containers index.
+     * 3. recent pinned LXC path if the index is temporarily unreachable.
      */
     override fun rootfsUrls(): List<String> {
         val arch = arch()
@@ -160,81 +131,22 @@ object DebianSpec : DistroSpec {
     override fun configure(rootfsDir: File) {
         TarExtractor.makeWritable(rootfsDir)
         TarExtractor.writeResolvConf(rootfsDir)
-        // apt and dpkg assume these exist; an LXC image ships some of them empty
-        // and the tar extractor skips empty directories it never saw an entry for.
-        listOf(
-            "var/lib/apt/lists/partial",
-            "var/cache/apt/archives/partial",
-            "var/lib/dpkg/updates",
-            "var/lib/dpkg/info",
-            "var/lib/dpkg/alternatives",
-            "var/log",
-            "run/lock",
-            "tmp",
-        ).forEach { File(rootfsDir, it).mkdirs() }
-        // Debian 13 is fully usr-merged. Repair root-level symlinks if Android's
-        // extraction path did not preserve them, then guarantee /bin/sh exists.
+        ensureAptStateDirectories(rootfsDir)
         repairUsrMergeSymlinks(rootfsDir)
         ensureWorkingShell(rootfsDir)
         File(rootfsDir, "etc/dpkg/dpkg.cfg.d").mkdirs()
         File(rootfsDir, "etc/dpkg/dpkg.cfg.d/force-unsafe-io").writeText("force-unsafe-io\n")
     }
 
-    private fun repairUsrMergeSymlinks(rootfsDir: File) {
-        for ((linkPath, target) in listOf("bin" to "usr/bin", "sbin" to "usr/sbin", "lib" to "usr/lib")) {
-            val link = File(rootfsDir, linkPath)
-            val targetFile = File(rootfsDir, target)
-            val broken = link.exists() && (link.canonicalFile != link.absoluteFile || !link.canonicalFile.exists())
-            if (!link.exists() || broken) {
-                if (targetFile.exists()) {
-                    if (link.exists()) link.delete()
-                    try {
-                        java.nio.file.Files.createSymbolicLink(
-                            link.toPath(),
-                            java.nio.file.Paths.get(target),
-                        )
-                    } catch (_: Exception) {
-                        // Remaining failure is handled by ensureWorkingShell.
-                    }
-                }
-            }
-        }
-    }
-
-    private fun ensureWorkingShell(rootfsDir: File) {
-        val sh = File(rootfsDir, "bin/sh")
-        val works = sh.exists() && sh.canonicalFile.exists()
-        if (!works) {
-            val dash = File(rootfsDir, "usr/bin/dash")
-            if (dash.exists()) {
-                sh.parentFile?.mkdirs()
-                if (sh.exists()) sh.delete()
-                dash.copyTo(sh, overwrite = true)
-                sh.setExecutable(true, false)
-            }
-        }
-    }
-
-    /**
-     * dpkg unpacks packages via hardlinks, which Android's `protected_hardlinks`
-     * policy refuses inside the app sandbox. Without the emulation the base
-     * install fails with a dpkg subprocess error even though `apt-get update`
-     * succeeded. `-L` is the companion lstat fix.
-     */
+    /** Android blocks some dpkg hardlink operations; PRoot emulates them. */
     override val prootArgs = listOf("--link2symlink", "-L")
-
     override val env = mapOf("DEBIAN_FRONTEND" to "noninteractive")
 }
 
-/**
- * Ubuntu 26.04 LTS — retained as an optional compatibility environment.
- */
+/** Ubuntu remains available only as a compatibility environment. */
 object UbuntuSpec : DistroSpec {
-
     override val distro = LinuxDistro.UBUNTU
-
     override val archiveName = "ubuntu-cloud-rootfs.tar.xz"
-
     private const val UBUNTU_RELEASE = "26.04"
 
     override fun arch(): String {
@@ -267,58 +179,79 @@ object UbuntuSpec : DistroSpec {
     override fun configure(rootfsDir: File) {
         TarExtractor.makeWritable(rootfsDir)
         TarExtractor.writeResolvConf(rootfsDir)
-        listOf(
-            "var/lib/apt/lists/partial",
-            "var/cache/apt/archives/partial",
-            "var/lib/dpkg/updates",
-            "var/lib/dpkg/info",
-            "var/lib/dpkg/alternatives",
-            "var/log",
-            "run/lock",
-            "tmp",
-        ).forEach { File(rootfsDir, it).mkdirs() }
+        ensureAptStateDirectories(rootfsDir)
         repairUsrMergeSymlinks(rootfsDir)
         ensureWorkingShell(rootfsDir)
         File(rootfsDir, "etc/dpkg/dpkg.cfg.d").mkdirs()
         File(rootfsDir, "etc/dpkg/dpkg.cfg.d/force-unsafe-io").writeText("force-unsafe-io\n")
     }
 
-    private fun repairUsrMergeSymlinks(rootfsDir: File) {
-        for ((linkPath, target) in listOf("bin" to "usr/bin", "sbin" to "usr/sbin", "lib" to "usr/lib")) {
-            val link = File(rootfsDir, linkPath)
-            val targetFile = File(rootfsDir, target)
-            val broken = link.exists() && (link.canonicalFile != link.absoluteFile || !link.canonicalFile.exists())
-            if (!link.exists() || broken) {
-                if (targetFile.exists()) {
-                    if (link.exists()) link.delete()
-                    try {
-                        java.nio.file.Files.createSymbolicLink(
-                            link.toPath(),
-                            java.nio.file.Paths.get(target),
-                        )
-                    } catch (_: Exception) {
-                        // Remaining failure is handled by ensureWorkingShell.
-                    }
+    override val prootArgs = listOf("--link2symlink", "-L")
+    override val env = mapOf("DEBIAN_FRONTEND" to "noninteractive")
+}
+
+private fun ensureAptStateDirectories(rootfsDir: File) {
+    listOf(
+        "var/lib/apt/lists/partial",
+        "var/cache/apt/archives/partial",
+        "var/lib/dpkg/updates",
+        "var/lib/dpkg/info",
+        "var/lib/dpkg/alternatives",
+        "var/log",
+        "run/lock",
+        "tmp",
+    ).forEach { File(rootfsDir, it).mkdirs() }
+}
+
+/**
+ * Debian/Ubuntu are usr-merged. Android extraction can lose root-level symlinks,
+ * including /lib64 on arm64, which prevents the dynamic linker or /bin/sh from
+ * starting under PRoot.
+ */
+private fun repairUsrMergeSymlinks(rootfsDir: File) {
+    for ((linkPath, target) in listOf(
+        "bin" to "usr/bin",
+        "sbin" to "usr/sbin",
+        "lib" to "usr/lib",
+        "lib64" to "usr/lib64",
+    )) {
+        val link = File(rootfsDir, linkPath)
+        val targetFile = File(rootfsDir, target)
+        val broken = link.exists() && (link.canonicalFile != link.absoluteFile || !link.canonicalFile.exists())
+        if (!link.exists() || broken) {
+            if (targetFile.exists()) {
+                if (link.exists()) link.delete()
+                runCatching {
+                    java.nio.file.Files.createSymbolicLink(
+                        link.toPath(),
+                        java.nio.file.Paths.get(target),
+                    )
                 }
             }
         }
     }
+}
 
-    private fun ensureWorkingShell(rootfsDir: File) {
-        val sh = File(rootfsDir, "bin/sh")
-        val works = sh.exists() && sh.canonicalFile.exists()
-        if (!works) {
-            val dash = File(rootfsDir, "usr/bin/dash")
-            if (dash.exists()) {
-                sh.parentFile?.mkdirs()
-                if (sh.exists()) sh.delete()
-                dash.copyTo(sh, overwrite = true)
-                sh.setExecutable(true, false)
-            }
+/**
+ * Guarantee a real executable /bin/sh even when usr-merge links were lost.
+ * Production rootfs carries sh.real from busybox-static; downloaded images can
+ * still fall back to dash.
+ */
+private fun ensureWorkingShell(rootfsDir: File) {
+    val sh = File(rootfsDir, "bin/sh")
+    val works = runCatching { sh.exists() && sh.canonicalFile.exists() }.getOrDefault(false)
+    if (works) return
+
+    val fallbacks = listOf("bin/sh.real", "usr/bin/sh.real", "usr/bin/dash")
+    for (fallback in fallbacks) {
+        val src = File(rootfsDir, fallback)
+        if (!src.isFile) continue
+        sh.parentFile?.mkdirs()
+        if (sh.exists()) sh.delete()
+        runCatching { src.copyTo(sh, overwrite = true) }
+        if (sh.isFile) {
+            sh.setExecutable(true, false)
+            return
         }
     }
-
-    override val prootArgs = listOf("--link2symlink", "-L")
-
-    override val env = mapOf("DEBIAN_FRONTEND" to "noninteractive")
 }
