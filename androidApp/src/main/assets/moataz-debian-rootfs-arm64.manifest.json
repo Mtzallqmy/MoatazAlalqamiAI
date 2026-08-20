@@ -5,7 +5,7 @@
   "codename": "trixie",
   "architecture": "arm64",
   "buildId": "linuxcontainers-20260820_05:24",
-  "sha256": "f57c832becb6af542e5ebe2d8cd2add5b032528131b5b8614e3ec3c68051d7e4",
+  "sha256": "50adbe05c2e657aaf4e3c82dd94e3933f5be73edff84e2048e6c0e2b3f676824",
   "requiredCli": ["bash", "sh", "git", "curl", "wget", "tar", "xz", "python3", "ps", "pgrep", "pkill", "jq", "rg", "ssh", "rsync", "file", "sha256sum"],
   "createdAt": "2026-08-20T05:24:00Z"
 }
