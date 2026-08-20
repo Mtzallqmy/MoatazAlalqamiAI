@@ -46,9 +46,14 @@ class KaiBuildViewModelTest {
         /** Old-to-new pairs passed to [renameProject], oldest first. */
         val renamed = mutableListOf<Pair<String, String>>()
 
+        var repairCalls = 0
+
         override fun install(agentIds: Set<String>) {}
         override fun cancel() {}
         override fun uninstall() {}
+        override fun repair() {
+            repairCalls += 1
+        }
         override fun refresh() {}
         override fun createProject(name: String): String? = name
         override fun deleteProject(name: String) {
@@ -136,6 +141,15 @@ class KaiBuildViewModelTest {
 
         assertEquals(listOf("old-demo"), fakeController.deleted)
         assertEquals(listOf("demo" to "demo-2"), fakeController.renamed)
+    }
+
+    @Test
+    fun `repair reaches the environment`() = runTest {
+        val viewModel = KaiBuildViewModel(fakeController, fakeRepository)
+
+        viewModel.repair()
+
+        assertEquals(1, fakeController.repairCalls)
     }
 
     @Test
