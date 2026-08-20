@@ -1,4 +1,8 @@
 <resources>
+    <string name="settings_api_diagnostics">تشخيص API</string>
+    <string name="settings_api_diagnostics_run">تشغيل التشخيص الكامل</string>
+    <string name="settings_api_diagnostics_agents_ready">جاهز للمحادثة وأدوات بيئة العمل</string>
+    <string name="settings_api_diagnostics_chat_only">قد تعمل المحادثة، لكن استدعاء أدوات البيئة غير مثبت</string>
     <string name="welcome_message">مرحبًا بك في Moataz Alalqami AI</string>
     <string name="prompt_ask_question">اطرح سؤالًا</string>
     <string name="error_invalid_api_key">مفتاح API غير صالح. يرجى التحقق من إعداداتك.</string>

@@ -172,6 +172,7 @@ class PersistentSandboxShell(
         // writeInput).
         val h = executor.executeStreaming(
             command = "exec bash --noprofile --norc",
+            workingDir = "/workspace",
             onStdout = { line -> dispatchStdout(line) },
             onStderr = { line -> dispatchStderr(line) },
         )

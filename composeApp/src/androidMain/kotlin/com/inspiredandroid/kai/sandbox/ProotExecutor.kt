@@ -31,7 +31,7 @@ class ProotExecutor(private val launcher: ProotLauncher) {
         commands: List<String>,
         timeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS,
         maxAttempts: Int = 2,
-        workingDir: String = "/root",
+        workingDir: String = "/workspace",
         extraEnv: Map<String, String> = emptyMap(),
     ): Map<String, Any> {
         var lastResult: Map<String, Any> = mapOf("success" to false, "error" to "No commands provided")
@@ -49,7 +49,7 @@ class ProotExecutor(private val launcher: ProotLauncher) {
     fun execute(
         command: String,
         timeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS,
-        workingDir: String = "/root",
+        workingDir: String = "/workspace",
         extraEnv: Map<String, String> = emptyMap(),
     ): Map<String, Any> {
         require(workingDir.isWithinSandbox()) {
@@ -76,7 +76,7 @@ class ProotExecutor(private val launcher: ProotLauncher) {
 
     fun executeStreaming(
         command: String,
-        workingDir: String = "/root",
+        workingDir: String = "/workspace",
         extraEnv: Map<String, String> = emptyMap(),
         onStdout: (String) -> Unit,
         onStderr: (String) -> Unit,
@@ -105,6 +105,8 @@ class ProotExecutor(private val launcher: ProotLauncher) {
         return normalized == "/" ||
             normalized == "/root" ||
             normalized.startsWith("/root/") ||
+            normalized == "/workspace" ||
+            normalized.startsWith("/workspace/") ||
             normalized.startsWith("/tmp/") ||
             normalized == "/tmp"
     }

@@ -23,7 +23,7 @@ private fun toolDescription(distro: LinuxDistro): String {
     val install = distro.packageManager.installCommand("<package>")
     return """Execute a shell command in a ${distro.displayName} sandbox and return stdout, stderr, exit code, and current working directory. The environment is a full ${distro.displayName} system running via proot.
 
-Shell session is PERSISTENT across calls within THIS conversation: cwd, exported environment variables, and any in-shell state carry from one call to the next, just like a normal terminal. So "cd /tmp" in one call, then "pwd" in the next, returns "/tmp". You do NOT need to chain "cd dir && command" unless you want directory changes to be one-shot. Other conversations and the in-app Terminal tab each have their own isolated shells; the rootfs and /root are still shared on disk, so files persist across all of them.
+Shell session is PERSISTENT across calls within THIS conversation and starts at /workspace: cwd, exported environment variables, and any in-shell state carry from one call to the next, just like a normal terminal. So "cd /tmp" in one call, then "pwd" in the next, returns "/tmp". You do NOT need to chain "cd dir && command" unless you want directory changes to be one-shot. Other conversations and the in-app Terminal tab each have their own shell sessions; the Debian installation and /workspace files are shared on disk, so project changes persist and are visible from Moataz Code.
 
 Pre-installed: ${distro.basePackages.joinToString(", ")}. Optional bundle (installed from Settings): ${distro.optionalPackages.joinToString(", ")} — that covers remote-server tools ssh, scp, sftp, lftp (FTP/FTPS) and rsync. Use them directly, e.g. "ssh user@host 'remote command'", "sftp user@host", "lftp -c 'open ftp://...; put file'". Authentication state (~/.ssh keys, known_hosts) persists.
 
@@ -41,6 +41,8 @@ Limits and behavior:
 - Set fresh=true to run in a one-shot isolated shell that doesn't share state with the persistent session. Useful when you specifically want isolation; rarely needed.
 
 Install extra packages with: $install
+
+For a GitHub or attached archive project, prefer workspace_import_project. It creates one non-overwriting folder under /workspace and rejects unsafe archive members.
 
 To show a file you produced in /root to the user, call open_file with the path relative to /root (e.g. open_file path="page.html"). File needs to be self-contained."""
 }
@@ -85,7 +87,7 @@ object ShellCommandTool : Tool {
             return ProcessManagerTool.processManager.startBackground(
                 command,
                 timeoutSeconds,
-                workingDir ?: "/root",
+                workingDir ?: "/workspace",
                 envMap,
             )
         }
@@ -93,7 +95,7 @@ object ShellCommandTool : Tool {
         val fresh = args["fresh"] as? Boolean ?: false
         if (fresh) {
             val executor = sandboxManager.createProotExecutor()
-            return executor.execute(command, timeoutSeconds, workingDir ?: "/root", envMap)
+            return executor.execute(command, timeoutSeconds, workingDir ?: "/workspace", envMap)
         }
 
         // Persistent shell path. Each conversation gets its own bash session so

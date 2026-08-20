@@ -36,7 +36,10 @@ import com.inspiredandroid.kai.network.Requests
 import com.inspiredandroid.kai.network.ServiceCredentials
 import com.inspiredandroid.kai.network.UnsupportedFileTypeException
 import com.inspiredandroid.kai.network.dtos.anthropic.extractText
+import com.inspiredandroid.kai.network.dtos.anthropic.AnthropicChatRequestDto
+import com.inspiredandroid.kai.network.dtos.gemini.GeminiChatRequestDto
 import com.inspiredandroid.kai.network.dtos.gemini.extractText
+import com.inspiredandroid.kai.network.dtos.openaicompatible.OpenAICompatibleChatRequestDto
 import com.inspiredandroid.kai.network.dtos.openaicompatible.extractInlineToolCalls
 import com.inspiredandroid.kai.network.toUiError
 import com.inspiredandroid.kai.network.tools.Tool
@@ -97,6 +100,7 @@ import kotlin.uuid.Uuid
 
 private const val MAX_API_RETRIES = 2
 private const val MAX_HEARTBEAT_MESSAGES = 50
+private const val PROVIDER_DIAGNOSTIC_TIMEOUT_MS = 30_000L
 
 // Explicit allowlist of tools exposed to the on-device (LiteRT) model. We use a
 // hardcoded name list rather than a structural filter because small Gemma models hit
@@ -409,6 +413,169 @@ class RemoteDataRepository(
             else -> fetchInstanceModels(service, instanceId)
         }
     }
+
+    override suspend fun diagnoseProvider(instanceId: String): ProviderDiagnosticReport {
+        val instance = getConfiguredServiceInstances().firstOrNull { it.instanceId == instanceId }
+            ?: return missingProviderReport(instanceId)
+        val service = Service.fromId(instance.serviceId)
+        val startedAt = Clock.System.now().toEpochMilliseconds()
+        val endpoint = if (service is Service.OpenAICompatible) {
+            getInstanceBaseUrl(instanceId, service).trimEnd('/') + service.chatUrl
+        } else {
+            service.chatUrl
+        }
+
+        if (service.isOnDevice) {
+            val model = appSettings.getInstanceModelId(instanceId)
+            val available = localInferenceEngine != null && getLocalDownloadedModels().isNotEmpty()
+            return ProviderDiagnosticReport(
+                instanceId = instanceId,
+                providerName = service.displayName,
+                modelId = model,
+                endpoint = "on-device",
+                connection = if (available) DiagnosticCheck.passed("Local inference engine and model are available") else DiagnosticCheck.failed("No local model is installed"),
+                modelDiscovery = if (available) DiagnosticCheck.passed("Local models detected", getLocalDownloadedModels().size) else DiagnosticCheck.failed("No local model detected"),
+                chatCompletion = DiagnosticCheck.skipped("Use the regular chat to validate on-device generation"),
+                toolCalling = DiagnosticCheck.unsupported("On-device models are not enabled for autonomous project runs"),
+                latencyMs = 0,
+                checkedAtEpochMs = Clock.System.now().toEpochMilliseconds(),
+            )
+        }
+
+        val connection = try {
+            validateConnection(service, instanceId)
+            DiagnosticCheck.passed("Authentication and provider endpoint accepted the request")
+        } catch (e: Exception) {
+            return failedProviderReport(instanceId, service, endpoint, startedAt, e)
+        }
+
+        val models = getInstanceModels(instanceId, service).value
+        val credentials = instanceCredentials(instanceId, service)
+        if (credentials.modelId.isBlank()) {
+            return ProviderDiagnosticReport(
+                instanceId, service.displayName, "", endpoint, connection,
+                if (models.isEmpty()) DiagnosticCheck.failed("No model was discovered or selected") else DiagnosticCheck.passed("Models discovered", models.size),
+                DiagnosticCheck.failed("Select a model before running the chat probe"),
+                DiagnosticCheck.skipped("Chat probe did not run"),
+                Clock.System.now().toEpochMilliseconds() - startedAt,
+                Clock.System.now().toEpochMilliseconds(),
+            )
+        }
+
+        val modelDiscovery = if (models.isNotEmpty()) {
+            DiagnosticCheck.passed("Provider models are available", models.size)
+        } else {
+            DiagnosticCheck.skipped("This provider does not expose a models endpoint; using the configured model")
+        }
+        val staticToolSupport = supportsTools(credentials.modelId)
+        return try {
+            val probe = runProviderProbe(service, credentials, requestToolCall = staticToolSupport)
+            ProviderDiagnosticReport(
+                instanceId = instanceId,
+                providerName = service.displayName,
+                modelId = credentials.modelId,
+                endpoint = endpoint,
+                connection = connection,
+                modelDiscovery = modelDiscovery,
+                chatCompletion = if (probe.responded) DiagnosticCheck.passed("The selected model returned a valid response") else DiagnosticCheck.failed("The selected model returned an empty response"),
+                toolCalling = when {
+                    !staticToolSupport -> DiagnosticCheck.unsupported("This model is classified as text-only and is not offered agent tools")
+                    probe.toolCalled -> DiagnosticCheck.passed("Structured function calling was verified with a harmless probe")
+                    else -> DiagnosticCheck.failed("The model answered but did not emit the requested structured tool call")
+                },
+                latencyMs = Clock.System.now().toEpochMilliseconds() - startedAt,
+                checkedAtEpochMs = Clock.System.now().toEpochMilliseconds(),
+            )
+        } catch (e: Exception) {
+            ProviderDiagnosticReport(
+                instanceId, service.displayName, credentials.modelId, endpoint, connection, modelDiscovery,
+                DiagnosticCheck.failed(safeDiagnosticMessage(e)),
+                DiagnosticCheck.failed("Tool probe could not complete"),
+                Clock.System.now().toEpochMilliseconds() - startedAt,
+                Clock.System.now().toEpochMilliseconds(),
+            )
+        }
+    }
+
+    private data class ProviderProbe(val responded: Boolean, val toolCalled: Boolean)
+
+    private suspend fun runProviderProbe(
+        service: Service,
+        credentials: ServiceCredentials,
+        requestToolCall: Boolean,
+    ): ProviderProbe {
+        val probeTool = object : Tool {
+            override val schema = com.inspiredandroid.kai.network.tools.ToolSchema(
+                name = "moataz_runtime_probe",
+                description = "Harmless diagnostic. Call it exactly once to confirm structured tool support.",
+                parameters = emptyMap(),
+            )
+            override suspend fun execute(args: Map<String, Any>): Any = mapOf("ok" to true)
+        }
+        val prompt = if (requestToolCall) {
+            "Call the moataz_runtime_probe function now. Do not answer with prose."
+        } else {
+            "Reply with exactly: MOATAZ_API_OK"
+        }
+        val tools = if (requestToolCall) listOf(probeTool) else emptyList()
+        return when (service) {
+            Service.Gemini -> {
+                val response = requests.geminiChat(
+                    credentials,
+                    listOf(GeminiChatRequestDto.Content(role = "user", parts = listOf(GeminiChatRequestDto.Part(text = prompt)))),
+                    tools,
+                    requestTimeoutMs = PROVIDER_DIAGNOSTIC_TIMEOUT_MS,
+                ).getOrThrow()
+                val parts = response.candidates.firstOrNull()?.content?.parts.orEmpty()
+                ProviderProbe(parts.any { !it.text.isNullOrBlank() } || parts.any { it.functionCall != null }, parts.any { it.functionCall?.name == "moataz_runtime_probe" })
+            }
+            Service.Anthropic -> {
+                val response = requests.anthropicChat(
+                    credentials,
+                    listOf(AnthropicChatRequestDto.Message("user", JsonPrimitive(prompt))),
+                    tools,
+                    requestTimeoutMs = PROVIDER_DIAGNOSTIC_TIMEOUT_MS,
+                ).getOrThrow()
+                ProviderProbe(response.content.isNotEmpty(), response.content.any { it.type == "tool_use" && it.name == "moataz_runtime_probe" })
+            }
+            else -> {
+                val response = requests.openAICompatibleChat(
+                    service,
+                    credentials,
+                    listOf(OpenAICompatibleChatRequestDto.Message("user", JsonPrimitive(prompt))),
+                    tools,
+                    requestTimeoutMs = PROVIDER_DIAGNOSTIC_TIMEOUT_MS,
+                ).getOrThrow()
+                val message = response.choices.firstOrNull()?.message
+                ProviderProbe(message != null, message?.toolCalls.orEmpty().any { it.function.name == "moataz_runtime_probe" })
+            }
+        }
+    }
+
+    private fun missingProviderReport(instanceId: String) = ProviderDiagnosticReport(
+        instanceId, "Unknown", "", "", DiagnosticCheck.failed("Provider instance not found"),
+        DiagnosticCheck.skipped("Provider is missing"), DiagnosticCheck.skipped("Provider is missing"),
+        DiagnosticCheck.skipped("Provider is missing"), 0, Clock.System.now().toEpochMilliseconds(),
+    )
+
+    private fun failedProviderReport(
+        instanceId: String,
+        service: Service,
+        endpoint: String,
+        startedAt: Long,
+        error: Exception,
+    ) = ProviderDiagnosticReport(
+        instanceId, service.displayName, appSettings.getInstanceModelId(instanceId), endpoint,
+        DiagnosticCheck.failed(safeDiagnosticMessage(error)), DiagnosticCheck.skipped("Connection failed"),
+        DiagnosticCheck.skipped("Connection failed"), DiagnosticCheck.skipped("Connection failed"),
+        Clock.System.now().toEpochMilliseconds() - startedAt, Clock.System.now().toEpochMilliseconds(),
+    )
+
+    private fun safeDiagnosticMessage(error: Exception): String =
+        (error.message ?: error::class.simpleName ?: "Provider request failed")
+            .replace(Regex("(?i)(bearer|api[-_ ]?key|token)\\s*[:=]?\\s*[^\\s,;]+")) {
+                "${it.groupValues[1]} ***REDACTED***"
+            }
 
     private suspend fun fetchInstanceModels(service: Service, instanceId: String) {
         when (service) {
@@ -1730,10 +1897,12 @@ class RemoteDataRepository(
         // Tool-use guidance is only worth sending when the model is actually given tools.
         // Mirror the tool list the request will carry: remote uses the full set (when the
         // model supports tools), local uses the allowlist-filtered set.
-        val hasTools = when (variant) {
-            SystemPromptVariant.CHAT_REMOTE -> !isLimited && getAvailableTools().isNotEmpty()
-            SystemPromptVariant.CHAT_LOCAL -> getLocalSafeTools().isNotEmpty()
+        val requestTools = when (variant) {
+            SystemPromptVariant.CHAT_REMOTE -> if (!isLimited) getAvailableTools() else emptyList()
+            SystemPromptVariant.CHAT_LOCAL -> getLocalSafeTools()
         }
+        val hasTools = requestTools.isNotEmpty()
+        val hasWorkspaceTool = requestTools.any { it.schema.name == "execute_shell_command" }
 
         val activeSkill = pendingActiveSkillId?.let { skillManager.getSkill(it) }
 
@@ -1741,6 +1910,7 @@ class RemoteDataRepository(
             variant = variant,
             soul = soul,
             hasTools = hasTools,
+            hasWorkspaceTool = hasWorkspaceTool,
             memoryEnabled = memoryEnabled,
             schedulingEnabled = schedulingEnabled,
             memoryInstructions = memoryInstructions,

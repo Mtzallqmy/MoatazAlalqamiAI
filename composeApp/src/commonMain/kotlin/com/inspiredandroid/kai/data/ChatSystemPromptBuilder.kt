@@ -97,6 +97,13 @@ internal const val DEFAULT_TOOL_USE_SECTION =
         "Check for a tool before saying a capability is unavailable. " +
         "Summarize noisy output and state any uncertainty — don't dump raw logs."
 
+internal const val DEFAULT_WORKSPACE_TOOL_SECTION =
+    "## Moataz Workspace\n" +
+        "A live Debian sandbox is attached to this conversation. Its canonical project root is `/workspace`, and shell commands and output are visible to the user in the conversation's Terminal view. " +
+        "For programming requests, inspect the real files, execute commands, edit inside `/workspace`, and run relevant tests or builds; do not merely print code or instructions. " +
+        "Put every new, imported, or cloned project in its own directory under `/workspace`. Report success only from observed stdout, stderr, and exit codes. " +
+        "Never place API keys, access tokens, passwords, or private SSH keys in commands, files, or logs unless the user explicitly authorizes the exact secret operation."
+
 /**
  * Universal acting-vs-clarifying policy composed into every chat variant. Caps the
  * model's tendency to ask multiple clarifying questions and to give up after the first
@@ -150,6 +157,7 @@ internal fun buildChatSystemPrompt(
     variant: SystemPromptVariant,
     soul: String,
     hasTools: Boolean,
+    hasWorkspaceTool: Boolean = false,
     memoryEnabled: Boolean,
     schedulingEnabled: Boolean,
     memoryInstructions: String?,
@@ -180,6 +188,10 @@ internal fun buildChatSystemPrompt(
     if (hasTools) {
         if (isNotEmpty()) append("\n\n")
         append(DEFAULT_TOOL_USE_SECTION)
+    }
+    if (hasWorkspaceTool) {
+        if (isNotEmpty()) append("\n\n")
+        append(DEFAULT_WORKSPACE_TOOL_SECTION)
     }
     if (isNotEmpty()) append("\n\n")
     append(DEFAULT_ACTING_SECTION)
