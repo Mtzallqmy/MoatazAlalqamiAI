@@ -4,6 +4,9 @@ import android.os.Build
 import java.io.File
 import java.io.IOException
 import java.net.URL
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Paths
 
 // Cap at 3.22: Alpine 3.23+ ships apk-tools 3, which uses execveat() in a way
 // proot does not support, so `apk update` fails under the sandbox runtime.
@@ -23,11 +26,6 @@ private const val LXC_INDEX = "https://images.linuxcontainers.org/meta/1.0/index
 private const val LXC_BASE = "https://images.linuxcontainers.org"
 private const val DEBIAN_RELEASE = "trixie"
 
-/**
- * The per-distribution facts the shared installer and proot launcher need:
- * where the rootfs comes from, what has to be fixed up after extraction, and
- * which proot flags and environment the distro's own tooling depends on.
- */
 sealed interface DistroSpec {
     val distro: LinuxDistro
     fun arch(): String
@@ -138,7 +136,6 @@ object DebianSpec : DistroSpec {
         File(rootfsDir, "etc/dpkg/dpkg.cfg.d/force-unsafe-io").writeText("force-unsafe-io\n")
     }
 
-    /** Android blocks some dpkg hardlink operations; PRoot emulates them. */
     override val prootArgs = listOf("--link2symlink", "-L")
     override val env = mapOf("DEBIAN_FRONTEND" to "noninteractive")
 }
@@ -204,9 +201,9 @@ private fun ensureAptStateDirectories(rootfsDir: File) {
 }
 
 /**
- * Debian/Ubuntu are usr-merged. Android extraction can lose root-level symlinks,
- * including /lib64 on arm64, which prevents the dynamic linker or /bin/sh from
- * starting under PRoot.
+ * Repair usr-merge links using NOFOLLOW_LINKS. File.exists() follows symlinks,
+ * so a broken link reports false while still occupying the directory entry;
+ * deleting that entry explicitly prevents FileAlreadyExists during repair.
  */
 private fun repairUsrMergeSymlinks(rootfsDir: File) {
     for ((linkPath, target) in listOf(
@@ -217,17 +214,16 @@ private fun repairUsrMergeSymlinks(rootfsDir: File) {
     )) {
         val link = File(rootfsDir, linkPath)
         val targetFile = File(rootfsDir, target)
-        val broken = link.exists() && (link.canonicalFile != link.absoluteFile || !link.canonicalFile.exists())
-        if (!link.exists() || broken) {
-            if (targetFile.exists()) {
-                if (link.exists()) link.delete()
-                runCatching {
-                    java.nio.file.Files.createSymbolicLink(
-                        link.toPath(),
-                        java.nio.file.Paths.get(target),
-                    )
-                }
-            }
+        if (!targetFile.exists()) continue
+
+        val path = link.toPath()
+        val entryExists = Files.exists(path, LinkOption.NOFOLLOW_LINKS)
+        val usable = runCatching { link.exists() && link.canonicalFile.exists() }.getOrDefault(false)
+        if (usable) continue
+
+        runCatching {
+            if (entryExists) Files.deleteIfExists(path)
+            Files.createSymbolicLink(path, Paths.get(target))
         }
     }
 }
@@ -235,7 +231,8 @@ private fun repairUsrMergeSymlinks(rootfsDir: File) {
 /**
  * Guarantee a real executable /bin/sh even when usr-merge links were lost.
  * Production rootfs carries sh.real from busybox-static; downloaded images can
- * still fall back to dash.
+ * still fall back to dash. Broken /bin/sh symlinks are removed without following
+ * them before the real file is copied.
  */
 private fun ensureWorkingShell(rootfsDir: File) {
     val sh = File(rootfsDir, "bin/sh")
@@ -247,9 +244,9 @@ private fun ensureWorkingShell(rootfsDir: File) {
         val src = File(rootfsDir, fallback)
         if (!src.isFile) continue
         sh.parentFile?.mkdirs()
-        if (sh.exists()) sh.delete()
-        runCatching { src.copyTo(sh, overwrite = true) }
-        if (sh.isFile) {
+        runCatching { Files.deleteIfExists(sh.toPath()) }
+        val copied = runCatching { src.copyTo(sh, overwrite = true) }.isSuccess
+        if (copied && sh.isFile) {
             sh.setExecutable(true, false)
             return
         }
