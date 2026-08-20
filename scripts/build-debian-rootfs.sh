@@ -7,7 +7,7 @@
 #   - xz
 #
 # Usage:
-#   ./scripts/build-debian-rootfs.sh [output.tar.xz]
+#   bash scripts/build-debian-rootfs.sh [output.tar.xz]
 
 set -euo pipefail
 
@@ -49,6 +49,7 @@ docker create \
       /root/projects \
       /root/.local/bin \
       /root/.opencode/bin \
+      /root/.grok/bin \
       /usr/local/bin \
       /etc/profile.d \
       /var/lib/apt/lists/partial \
@@ -64,6 +65,10 @@ docker create \
 # Managed by Kai Build.
 export PATH="/root/.local/bin:/root/.grok/bin:/root/.opencode/bin${PATH:+:${PATH}}"
 EOF
+
+    # The current build shell started before profile.d existed, so set the same
+    # PATH explicitly for the installer and the health probes below.
+    export PATH="/root/.local/bin:/root/.grok/bin:/root/.opencode/bin:$PATH"
 
     # OpenCode is part of the production offline experience. Fail the rootfs
     # build rather than shipping an image that advertises an unavailable AI CLI.
