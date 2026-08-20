@@ -13,19 +13,13 @@ internal fun safeChild(root: File, parts: List<String>): File? {
 
 /**
  * Translates a guest absolute path to the host file behind it, following the
- * same binds proot is started with. Both file browsers use this, so what the
- * user sees in the Files tab always matches what a shell in that environment sees.
- *
- * Branches are ordered most-specific first, which is what makes `/root/projects`
- * resolve to the bind rather than to the empty mount point inside the rootfs.
+ * same binds PRoot is started with. `/root/projects` and `/workspace` are two
+ * guest aliases for the same persistent project directory.
  */
 class GuestFileMap(
     private val rootfsDir: File,
-    /** Host directory bound to `/root`. */
     private val homeDir: File,
-    /** Host directory bound to `/root/projects`, or null when nothing is bound there. */
     private val projectsDir: File?,
-    /** Host directory bound to `/tmp`. */
     private val tmpDir: File,
 ) {
 
@@ -37,6 +31,9 @@ class GuestFileMap(
         return when {
             projectsDir != null && parts.size >= 2 && parts[0] == "root" && parts[1] == "projects" ->
                 safeChild(projectsDir, parts.drop(2))
+
+            projectsDir != null && parts.firstOrNull() == "workspace" ->
+                safeChild(projectsDir, parts.drop(1))
 
             parts.firstOrNull() == "tmp" -> safeChild(tmpDir, parts.drop(1))
 
