@@ -4,6 +4,9 @@ import com.inspiredandroid.kai.data.AppSettings
 import com.inspiredandroid.kai.data.SettingsJsonList
 import com.inspiredandroid.kai.network.tools.Tool
 import com.inspiredandroid.kai.network.tools.ToolInfo
+import com.inspiredandroid.kai.security.SecretKeys
+import com.inspiredandroid.kai.security.SecretStore
+import com.inspiredandroid.kai.security.SecretStoreHolder
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -12,8 +15,13 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 
 private val serverIdRegex = Regex("[^a-z0-9]")
+private val secretHeaderRegex = Regex("(?i)^(authorization|proxy-authorization|x-api-key|api-key|.*token.*|.*secret.*|.*password.*)$")
+private const val SECRET_HEADER_REFERENCE = "__moataz_secret_ref__:"
 
-class McpServerManager(private val appSettings: AppSettings) {
+class McpServerManager(
+    private val appSettings: AppSettings,
+    private val secretStore: SecretStore? = SecretStoreHolder.store,
+) {
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -41,16 +49,52 @@ class McpServerManager(private val appSettings: AppSettings) {
         migratePopularDefaultHeaders()
     }
 
-    fun getServers(): List<McpServerConfig> = servers.get()
+    fun getServers(): List<McpServerConfig> = servers.get().map(::restoreSecretHeaders)
 
-    private fun saveServers(servers: List<McpServerConfig>) = this.servers.set(servers)
+    private fun saveServers(servers: List<McpServerConfig>) {
+        this.servers.set(servers.map(::protectSecretHeaders))
+    }
 
     private fun migratePopularDefaultHeaders() {
         val current = servers.get()
         val updated = applyPopularDefaultHeaders(current)
-        if (updated !== current) {
+        if (updated !== current || current.any { config ->
+                config.headers.any { (name, value) ->
+                    secretHeaderRegex.matches(name) && !value.startsWith(SECRET_HEADER_REFERENCE)
+                }
+            }
+        ) {
             saveServers(updated)
         }
+    }
+
+    private fun protectSecretHeaders(config: McpServerConfig): McpServerConfig {
+        val protectedHeaders = config.headers.mapValues { (name, value) ->
+            if (!secretHeaderRegex.matches(name) || value.startsWith(SECRET_HEADER_REFERENCE)) {
+                value
+            } else {
+                val store = requireNotNull(secretStore) {
+                    "Encrypted secret storage is required for MCP credential headers"
+                }
+                val key = SecretKeys.mcpHeader(config.id, name)
+                kotlinx.coroutines.runBlocking { store.put(key, value) }
+                "$SECRET_HEADER_REFERENCE$key"
+            }
+        }
+        return config.copy(headers = protectedHeaders)
+    }
+
+    private fun restoreSecretHeaders(config: McpServerConfig): McpServerConfig {
+        val restored = config.headers.mapNotNull { (name, value) ->
+            if (!value.startsWith(SECRET_HEADER_REFERENCE)) {
+                name to value
+            } else {
+                val key = value.removePrefix(SECRET_HEADER_REFERENCE)
+                val secret = kotlinx.coroutines.runBlocking { secretStore?.get(key) }
+                secret?.let { name to it }
+            }
+        }.toMap()
+        return config.copy(headers = restored)
     }
 
     fun addServer(name: String, url: String, headers: Map<String, String>): McpServerConfig {
