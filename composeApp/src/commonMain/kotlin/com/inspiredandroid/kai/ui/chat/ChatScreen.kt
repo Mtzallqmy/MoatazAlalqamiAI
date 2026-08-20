@@ -512,6 +512,7 @@ private fun ChatModeScreen(
     }
     val keyboardController = LocalSoftwareKeyboardController.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val componentScope = rememberCoroutineScope()
 
     // When the active conversation changes (e.g. user starts a new chat from the
     // top bar or taps the heartbeat banner), collapse the sandbox view so the
@@ -671,8 +672,6 @@ private fun ChatModeScreen(
                             )
                         } else {
                             val listState = rememberLazyListState()
-                            val componentScope = rememberCoroutineScope()
-
                             LaunchedEffect(uiState.history.size) {
                                 // Capture history at effect start to prevent race conditions
                                 val history = uiState.history
