@@ -39,6 +39,7 @@ class CliRegistryTest {
             displayName = "Bundle",
             executable = "bundle",
             install = InstallStrategy.Apt(listOf("first", "second package")),
+            category = CliCategory.Utility,
         )
         val runner = CliCommandRunner { command ->
             if (command.startsWith("apt-get")) {
