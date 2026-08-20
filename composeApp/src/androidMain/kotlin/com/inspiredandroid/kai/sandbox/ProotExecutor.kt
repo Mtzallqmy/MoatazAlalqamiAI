@@ -2,6 +2,7 @@ package com.inspiredandroid.kai.sandbox
 
 import com.inspiredandroid.kai.linux.ProotHandle
 import com.inspiredandroid.kai.linux.ProotLauncher
+import com.inspiredandroid.kai.linux.PtyProotExecutor
 import java.io.BufferedReader
 import java.io.IOException
 import java.util.concurrent.CompletableFuture
@@ -17,16 +18,23 @@ private const val MAX_TIMEOUT_SECONDS = 180L
  * results shaped as the map the shell tool and background jobs already consume.
  *
  * Everything about starting the process — argv, binds, environment — lives in
- * the shared [ProotLauncher], which Kai Build's PTY executor uses too.
+ * the shared [ProotLauncher]. Callers that explicitly need a TTY obtain a
+ * [PtyProotExecutor] from the same launcher via [createPtyExecutor].
  */
 class ProotExecutor(private val launcher: ProotLauncher) {
 
-    /**
-     * Try a list of commands (primary + mirrors) with retry and backoff.
-     * Each command is attempted up to [maxAttempts] times; on failure the next
-     * entry in the list is tried until one succeeds or all are exhausted.
-     * Returns the result of the last attempt.
-     */
+    /** Create a real-PTY executor without duplicating the PRoot argv/bind setup. */
+    fun createPtyExecutor(
+        tmpPath: String,
+        columns: Int = 80,
+        rows: Int = 24,
+    ): PtyProotExecutor = PtyProotExecutor(
+        launcher = launcher,
+        tmpPath = tmpPath,
+        initialColumns = columns,
+        initialRows = rows,
+    )
+
     suspend fun executeWithRetry(
         commands: List<String>,
         timeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS,
@@ -109,7 +117,6 @@ class ProotExecutor(private val launcher: ProotLauncher) {
             normalized == "/tmp"
     }
 
-    /** Collapses `..` / `.` segments without touching the filesystem. */
     private fun normalize(path: String): String {
         val parts = path.trimStart('/').split("/").filter { it.isNotEmpty() }
         val stack = ArrayDeque<String>()
