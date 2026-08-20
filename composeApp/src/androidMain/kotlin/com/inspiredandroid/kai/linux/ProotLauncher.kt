@@ -13,8 +13,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 const val DEFAULT_GUEST_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 private const val DEFAULT_MAX_OUTPUT_CHARS = 15_000
+private const val LEGACY_PROJECTS_PATH = "/root/projects"
+private const val UNIFIED_WORKSPACE_PATH = "/workspace"
 
-/** Outcome of a one-shot command inside a rootfs. */
 data class ProotResult(
     val success: Boolean,
     val stdout: String = "",
@@ -23,11 +24,6 @@ data class ProotResult(
     val timedOut: Boolean = false,
     val error: String? = null,
 ) {
-    /**
-     * Best available explanation for a failure, trimmed for display.
-     * Prefers the tail of the stream — apt/dpkg put the real error last
-     * (early lines are often only the apt-utils debconf warning).
-     */
     fun failureDetail(maxChars: Int = 500): String {
         val raw = stderr.ifBlank { stdout }.ifBlank { error.orEmpty() }.trim()
         if (raw.length <= maxChars) return raw
@@ -35,21 +31,11 @@ data class ProotResult(
     }
 }
 
-/**
- * A running proot process.
- *
- * Writes go through one background thread: the pipe write blocks, and
- * interactive input can arrive on the UI thread a keystroke at a time. A single
- * thread also keeps the bytes in the order they were produced.
- */
 class ProotHandle internal constructor(
     private val process: Process,
     private val cancelled: AtomicBoolean,
     private val readerFutures: List<CompletableFuture<Void>>,
-    /**
-     * Host-side file the guest bridge wrote its own pid into, for sessions that
-     * run under a PTY. proot does not namespace pids, so it is a host pid.
-     */
+    /** Host-side pid file written by PTY bridges. */
     private val guestPidFile: File? = null,
 ) {
     private val writer = Executors.newSingleThreadExecutor { runnable ->
@@ -60,10 +46,6 @@ class ProotHandle internal constructor(
 
     fun cancel() {
         cancelled.set(true)
-        // Destroying the proot process alone does not end a PTY session: proot
-        // survives destroyForcibly() here, and its guest children (the bridge and
-        // the shell under it) would outlive it as orphans anyway. Killing the
-        // bridge closes the PTY master, which hangs up the shell and lets proot exit.
         killGuest()
         runCatching { writer.shutdownNow() }
         runCatching { process.inputStream.close() }
@@ -93,14 +75,9 @@ class ProotHandle internal constructor(
     }
 
     fun writeText(text: String) = writeBytes(text.toByteArray(Charsets.UTF_8))
-
-    /** Writes [line] plus a newline — one command to a shell reading stdin. */
     fun writeLine(line: String) = writeText(line + "\n")
 
     fun awaitExit(): Int {
-        // Poll so a cancel() from another thread can short-circuit the wait.
-        // On Linux, close(fd) does NOT unblock a thread already inside read(fd),
-        // so reader futures can sit waiting on a tracee pipe even after SIGKILL.
         while (!cancelled.get() && process.isAlive) {
             runCatching { process.waitFor(200, TimeUnit.MILLISECONDS) }
         }
@@ -110,11 +87,7 @@ class ProotHandle internal constructor(
     }
 }
 
-/**
- * Builds the proot command line and environment and starts the process. Both the
- * chat sandbox's pipe-based executor and Kai Build's PTY executor go through
- * this; they differ only in how they read what comes back.
- */
+/** Shared source of truth for every local PRoot invocation. */
 class ProotLauncher(
     private val prootPath: String,
     private val libDir: String,
@@ -122,9 +95,7 @@ class ProotLauncher(
     private val tmpPath: String,
     /** Extra host→guest binds on top of `/dev`, `/proc`, `/sys` and `/tmp`. */
     private val binds: List<Pair<String, String>>,
-    /** Flags the distro cannot work without — see [DistroSpec.prootArgs]. */
     private val extraArgs: List<String> = emptyList(),
-    /** Overrides and additions on top of the base environment. */
     private val env: Map<String, String> = emptyMap(),
 ) {
 
@@ -138,10 +109,6 @@ class ProotLauncher(
         File(rootfsPath).parentFile,
     )
 
-    /**
-     * Runs [command] to completion. stdout and stderr are drained concurrently —
-     * reading them in sequence deadlocks as soon as the other pipe's buffer fills.
-     */
     fun execute(
         command: String,
         timeoutSeconds: Long,
@@ -196,7 +163,16 @@ class ProotLauncher(
         add("--bind=/dev")
         add("--bind=/proc")
         add("--bind=/sys")
-        binds.forEach { (host, guest) -> add("--bind=$host:$guest") }
+        binds.forEach { (host, guest) ->
+            add("--bind=$host:$guest")
+            // The app historically exposed projects at /root/projects while the
+            // unified SandboxBackend contract uses /workspace. Bind both names
+            // to the same host directory so agents and the mobile UI see exactly
+            // the same files and old sessions remain compatible.
+            if (guest == LEGACY_PROJECTS_PATH) {
+                add("--bind=$host:$UNIFIED_WORKSPACE_PATH")
+            }
+        }
         add("--bind=$tmpPath:/tmp")
         add("-0")
         add("-w")
@@ -233,8 +209,7 @@ class ProotLauncher(
                 while (reader.read(buf) != -1) { /* discard */ }
             }
         } catch (_: IOException) {
-            // Stream closed under us (typically destroyForcibly on timeout).
-            // Return what we have so the timed-out path can surface a clean result.
+            // Stream closed by cancellation/timeout; return the partial output.
         }
         return sb.toString()
     }
