@@ -24,6 +24,7 @@ private const val KEY_DISTRO = "distro"
 private const val KEY_HOME = "home"
 private const val HOME_ROOTFS = "rootfs"
 private const val HOME_EXTERNAL = "external"
+private const val PRODUCTION_DEBIAN_MAJOR = "13"
 
 /**
  * What an install recorded about itself. Written only once the install fully
@@ -126,12 +127,38 @@ class LinuxPaths(
         if (source.exists()) source.copyTo(tallocTarget, overwrite = true)
     }
 
+    /**
+     * Returns a usable installed marker. Existing Debian 12 installs are
+     * deliberately treated as not installed by v4.2.0 so setup replaces them
+     * with Debian 13 instead of exposing an old rootfs as production-ready.
+     * Project directories live outside [root] and are therefore preserved.
+     */
     fun readMarker(): InstallMarker? {
         if (!rootfsDir.isDirectory) return null
-        parseMarker()?.let { return it }
+        parseMarker()?.let { marker ->
+            return marker.takeIf { isCompatibleRootfs(it) }
+        }
         if (!File(root, legacyEvidence).exists()) return null
+        if (!isCompatibleRootfs(legacyMarker)) return null
         writeMarker(legacyMarker)
         return legacyMarker
+    }
+
+    private fun isCompatibleRootfs(marker: InstallMarker): Boolean {
+        if (marker.distro != LinuxDistro.DEBIAN) return true
+        val osRelease = File(rootfsDir, "etc/os-release")
+        if (!osRelease.isFile) return false
+        val values = runCatching {
+            osRelease.readLines()
+                .mapNotNull { line ->
+                    val idx = line.indexOf('=')
+                    if (idx <= 0) null else line.substring(0, idx) to line.substring(idx + 1).trim().trim('"')
+                }
+                .toMap()
+        }.getOrNull() ?: return false
+        val id = values["ID"]?.lowercase()
+        val major = values["VERSION_ID"]?.substringBefore('.')
+        return id == LinuxDistro.DEBIAN.id && major == PRODUCTION_DEBIAN_MAJOR
     }
 
     fun writeMarker(marker: InstallMarker) {
