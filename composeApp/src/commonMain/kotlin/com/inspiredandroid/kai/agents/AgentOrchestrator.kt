@@ -1,6 +1,7 @@
 package com.inspiredandroid.kai.agents
 
 import com.inspiredandroid.kai.gateway.AiRequestOutcome
+import com.inspiredandroid.kai.brand.AssistantIdentity
 import com.inspiredandroid.kai.tools.ToolRiskLevel
 import com.inspiredandroid.kai.tools.ToolResult
 import com.inspiredandroid.kai.tools.ToolRuntime
@@ -358,7 +359,8 @@ class AgentOrchestrator(
         private const val APPROVAL_TIMEOUT_MINUTES = 30
 
         val SYSTEM_PROMPT: String = """
-            You are an agentic developer assistant running inside an Ubuntu 26.04 sandbox on the user's Android device.
+            You are ${AssistantIdentity.Default.systemIdentity}, running as a developer agent inside Debian 13 Trixie arm64 in Moataz Runtime on the user's Android device.
+            The canonical project root is /workspace.
             Prefer reading before editing. Break tasks into small verifiable steps: write files, install dependencies,
             build, run the dev server, and expose its port so the user can preview it. After every command, inspect the
             output; if a build or test fails, diagnose the error, apply a fix, and retry. When done, summarize what was

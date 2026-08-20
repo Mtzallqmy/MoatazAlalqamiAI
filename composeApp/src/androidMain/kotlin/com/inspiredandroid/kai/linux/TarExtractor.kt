@@ -41,11 +41,11 @@ object TarExtractor {
     }
 
     /** Hardened extraction with tar-bomb and traversal guards, for untrusted archives. */
-    fun extractSafe(archive: File, targetDir: File) {
+    fun extractSafe(archive: File, targetDir: File, cancellationCheck: () -> Unit = {}) {
         targetDir.mkdirs()
         val raw = BufferedInputStream(FileInputStream(archive))
         val stream = if (archive.name.endsWith(".xz")) XZInputStream(raw) else GZIPInputStream(raw)
-        stream.use { extractTar(it, targetDir, safe = true) }
+        stream.use { extractTar(it, targetDir, safe = true, cancellationCheck = cancellationCheck) }
     }
 
     fun makeWritable(rootfsDir: File) {
@@ -102,7 +102,12 @@ object TarExtractor {
         file.writeText(content)
     }
 
-    private fun extractTar(inputStream: InputStream, targetDir: File, safe: Boolean = false) {
+    private fun extractTar(
+        inputStream: InputStream,
+        targetDir: File,
+        safe: Boolean = false,
+        cancellationCheck: () -> Unit = {},
+    ) {
         val headerBuffer = ByteArray(TAR_BLOCK_SIZE)
         val dataBuffer = ByteArray(BUFFER_SIZE)
         val targetCanonical = targetDir.canonicalPath
@@ -110,6 +115,7 @@ object TarExtractor {
         var totalBytes = 0L
 
         while (true) {
+            cancellationCheck()
             val headerBytesRead = readFully(inputStream, headerBuffer)
             if (headerBytesRead < TAR_BLOCK_SIZE) break
 
@@ -131,21 +137,19 @@ object TarExtractor {
             // --- Tar bomb + filename guards (safe mode, for untrusted archives).
             if (safe) {
                 entryCount++
-                if (entryCount > MAX_TAR_ENTRIES) break
+                if (entryCount > MAX_TAR_ENTRIES) throw java.io.IOException("Archive exceeds $MAX_TAR_ENTRIES entries")
                 if (size > MAX_TAR_SINGLE_FILE_BYTES) {
-                    if (size > 0) skipBytes(inputStream, alignToBlock(size))
-                    continue
+                    throw java.io.IOException("Archive entry exceeds $MAX_TAR_SINGLE_FILE_BYTES bytes: $fullName")
                 }
                 totalBytes += size
-                if (totalBytes > MAX_TAR_TOTAL_BYTES) break
+                if (totalBytes > MAX_TAR_TOTAL_BYTES) throw java.io.IOException("Archive exceeds $MAX_TAR_TOTAL_BYTES extracted bytes")
                 if (fullName.length > MAX_TAR_FILENAME_LENGTH || fullName.contains("\u0000")) {
-                    if (size > 0) skipBytes(inputStream, alignToBlock(size))
-                    continue
+                    throw java.io.IOException("Unsafe archive entry name")
                 }
             }
 
             val outFile = File(targetDir, fullName)
-            if (!outFile.canonicalPath.startsWith(targetCanonical)) {
+            if (!isInside(targetCanonical, outFile.canonicalPath)) {
                 skipBytes(inputStream, alignToBlock(size))
                 continue
             }
@@ -184,20 +188,14 @@ object TarExtractor {
                     // In safe mode, only accept symlinks that resolve inside the
                     // target tree so a crafted archive cannot escape via links.
                     if (safe) {
-                        val resolved = java.io.File(targetDir, linkName)
-                        if (!resolved.path.startsWith(targetCanonical)) continue
+                        val resolved = safeLinkTarget(targetDir, outFile, linkName)
+                        if (resolved == null || !isInside(targetCanonical, resolved.canonicalPath)) continue
                     }
                     // Relatively-targeted symlinks must be resolved against the
                     // link's own directory, not the archive root — a relative
                     // target like `dash` inside `usr/bin/sh` points to `usr/bin`,
                     // but `../usr/bin` resolved from the root wrongly escapes the
                     // guard (and produces broken links under proot).
-                    val guardTarget = if (safe && !linkName.startsWith("/")) {
-                        java.io.File(outFile.parentFile ?: targetDir, linkName)
-                    } else {
-                        java.io.File(targetDir, linkName)
-                    }
-                    if (safe && !guardTarget.path.startsWith(targetCanonical)) continue
                     var linked = false
                     try {
                         if (outFile.exists()) outFile.delete()
@@ -227,11 +225,11 @@ object TarExtractor {
                 }
 
                 '1' -> {
-                    val linkTarget = File(targetDir, linkName)
+                    val linkTarget = safeLinkTarget(targetDir, outFile, linkName) ?: continue
                     outFile.parentFile?.mkdirs()
                     // Hard link must also resolve inside the target tree (defends
                     // against a crafted archive linking to an absolute host path).
-                    if (!linkTarget.path.startsWith(targetCanonical)) continue
+                    if (!isInside(targetCanonical, linkTarget.canonicalPath)) continue
                     if (linkTarget.exists()) {
                         linkTarget.copyTo(outFile, overwrite = true)
                     }
@@ -242,6 +240,19 @@ object TarExtractor {
 
             // Non-file entries (long-name headers, pax records) still carry a body.
             if (size > 0) skipBytes(inputStream, alignToBlock(size))
+        }
+    }
+
+    private fun isInside(rootCanonical: String, candidateCanonical: String): Boolean =
+        candidateCanonical == rootCanonical || candidateCanonical.startsWith(rootCanonical + File.separator)
+
+    /** Absolute archive links are guest-root absolute, never Android-host absolute. */
+    private fun safeLinkTarget(targetDir: File, outFile: File, linkName: String): File? {
+        if (linkName.isBlank() || linkName.contains('\u0000')) return null
+        return if (linkName.startsWith('/')) {
+            File(targetDir, linkName.trimStart('/'))
+        } else {
+            File(outFile.parentFile ?: targetDir, linkName)
         }
     }
 

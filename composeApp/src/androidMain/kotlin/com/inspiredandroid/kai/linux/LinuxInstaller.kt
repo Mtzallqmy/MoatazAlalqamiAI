@@ -1,13 +1,17 @@
 package com.inspiredandroid.kai.linux
 
 import android.content.Context
+import com.inspiredandroid.kai.runtime.RootfsManifest
+import com.inspiredandroid.kai.runtime.RuntimeReadinessGate
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.serialization.json.Json
 import java.io.File
 import java.io.FileOutputStream
+import java.security.MessageDigest
 
 /** Where an install has got to, in terms both feature UIs can render. */
 sealed interface InstallStep {
@@ -24,17 +28,19 @@ private const val PACKAGE_TIMEOUT_SECONDS = 900L
 
 /**
  * Name of the pre-built Debian rootfs shipped inside the APK assets.
- * Bundled with base packages + OpenCode so the install works fully offline.
+ * The image supplies Debian itself; required developer packages are probed and
+ * installed explicitly before readiness.
  */
 private const val EMBEDDED_ROOTFS_ASSET = "moataz-debian-rootfs-arm64.tar.xz"
+private const val EMBEDDED_ROOTFS_MANIFEST = "moataz-debian-rootfs-arm64.manifest.json"
 
 /**
  * Downloads, extracts and bootstraps a rootfs. The chat sandbox and Kai Build
  * both drive this; whoever gets there first produces the install the other one
  * then finds already present.
  *
- * When the device is arm64 and the APK bundles a pre-built rootfs, the network
- * download is skipped entirely — the embedded image is extracted in its place.
+ * When the device is arm64 and the APK bundles a matching verified rootfs, the
+ * rootfs download is skipped; package setup may still require network access.
  */
 class LinuxInstaller(
     private val paths: LinuxPaths,
@@ -69,27 +75,36 @@ class LinuxInstaller(
         paths.ensureLayout()
 
         val archive = paths.archiveFile(spec)
+        val stagingRootfs = File(paths.root, "rootfs.staging")
+        stagingRootfs.deleteRecursively()
         try {
-            // Prefer the embedded rootfs shipped inside the APK. This makes the
-            // install work fully offline and immune to mirror flakiness — the
-            // bundled image already carries the base packages and OpenCode, so
-            // the subsequent apt/proot steps become near-instant no-ops.
+            // Prefer the embedded, manifest-verified Debian image. Package and
+            // CLI probes below remain authoritative; asset presence is not Ready.
             val hasEmbeddedAsset = copyEmbeddedAsset(spec, archive)
             if (!hasEmbeddedAsset) {
                 onStep(InstallStep.Download(0f))
-                downloader.download(spec.rootfsUrls(), archive) { onStep(InstallStep.Download(it)) }
+                if (distro == LinuxDistro.DEBIAN) {
+                    downloader.downloadVerified(spec.rootfsUrls(), archive) { onStep(InstallStep.Download(it)) }
+                } else {
+                    downloader.download(spec.rootfsUrls(), archive) { onStep(InstallStep.Download(it)) }
+                }
             }
 
             currentCoroutineContext().ensureActive()
             onStep(InstallStep.Extract)
-            TarExtractor.extractSafe(archive, paths.rootfsDir)
+            val installContext = currentCoroutineContext()
+            TarExtractor.extractSafe(archive, stagingRootfs) { installContext.ensureActive() }
+        } catch (e: Throwable) {
+            stagingRootfs.deleteRecursively()
+            throw e
         } finally {
             archive.delete()
         }
 
         currentCoroutineContext().ensureActive()
         onStep(InstallStep.Configure)
-        spec.configure(paths.rootfsDir)
+        spec.configure(stagingRootfs)
+        check(stagingRootfs.renameTo(paths.rootfsDir)) { "Could not atomically activate extracted rootfs" }
         paths.ensureMountPoints()
 
         val launcher = launcherFor(spec)
@@ -104,9 +119,9 @@ class LinuxInstaller(
             throw e
         }
 
+        val health = EnvironmentDoctor(paths).diagnose()
         val marker = InstallMarker(distro, homeOnRootfs = true)
-        paths.writeMarker(marker)
-        return marker
+        return RuntimeReadinessGate.commit(health, marker, paths::writeMarker)
     }
 
     /**
@@ -119,7 +134,15 @@ class LinuxInstaller(
     private fun copyEmbeddedAsset(spec: DistroSpec, target: File): Boolean {
         if (!spec.arch().equals("arm64", ignoreCase = true)) return false
         val assetList = appContext.assets.list("") ?: emptyArray()
-        if (EMBEDDED_ROOTFS_ASSET !in assetList) return false
+        if (EMBEDDED_ROOTFS_ASSET !in assetList || EMBEDDED_ROOTFS_MANIFEST !in assetList) return false
+        val manifest = runCatching {
+            appContext.assets.open(EMBEDDED_ROOTFS_MANIFEST).bufferedReader().use {
+                Json { ignoreUnknownKeys = false }.decodeFromString<RootfsManifest>(it.readText())
+            }
+        }.getOrNull() ?: return false
+        // Fail closed: an asset with a valid hash but the wrong distro/version/
+        // architecture is not a production Moataz Runtime image.
+        if (!manifest.isProductionRuntime()) return false
         target.parentFile?.mkdirs()
         appContext.assets.open(EMBEDDED_ROOTFS_ASSET).use { input ->
             FileOutputStream(target).use { output ->
@@ -130,6 +153,7 @@ class LinuxInstaller(
                 }
             }
         }
+        check(target.sha256() == manifest.sha256) { "Embedded rootfs SHA-256 mismatch" }
         return true
     }
 
@@ -241,4 +265,17 @@ class LinuxInstaller(
          */
         val packageLock = Mutex()
     }
+}
+
+private fun File.sha256(): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    inputStream().buffered().use { input ->
+        val buffer = ByteArray(64 * 1024)
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            if (read > 0) digest.update(buffer, 0, read)
+        }
+    }
+    return digest.digest().joinToString("") { "%02x".format(it) }
 }
