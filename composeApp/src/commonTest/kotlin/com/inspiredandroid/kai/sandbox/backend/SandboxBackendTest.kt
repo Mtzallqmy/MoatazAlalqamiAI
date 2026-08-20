@@ -43,22 +43,30 @@ class SandboxConfigTest {
         assertEquals(4, NetworkPolicy.entries.size)
         assertNotNull(NetworkPolicy.OFFLINE)
     }
+
+    @Test
+    fun `local proot advertises real pty while no-op does not`() {
+        assertTrue(SandboxCapabilities.LOCAL_PROOT.pty)
+        assertFalse(SandboxCapabilities.NONE.pty)
+    }
 }
 
 class SandboxStateTest {
 
     @Test
-    fun `exec request carries command and environment`() {
+    fun `exec request carries command environment and pty intent`() {
         val req = ExecRequest(
-            command = "make",
-            args = listOf("-j4"),
+            command = "opencode",
+            args = listOf("--help"),
             workingDirectory = "/workspace/app",
             environment = mapOf("CI" to "true"),
+            pty = true,
         )
-        assertEquals("make", req.command)
-        assertEquals(listOf("-j4"), req.args)
+        assertEquals("opencode", req.command)
+        assertEquals(listOf("--help"), req.args)
         assertEquals("/workspace/app", req.workingDirectory)
         assertEquals(mapOf("CI" to "true"), req.environment)
+        assertTrue(req.pty)
     }
 }
 
