@@ -508,26 +508,27 @@ The user can then open: **Chat**, **Terminal**, **Files**, **Git**, **Preview**,
 
 ---
 
-## 6. Implementation status (v3.5.0)
+## 6. Implementation status
 
-The full architecture described above is implemented on `feature/ai-gateway-hardening`:
+This table describes code presence, not production certification. Only a green
+CI run and the listed runtime/device probes can promote a layer to verified:
 
 | Layer | Status | Implementation |
 |---|---|---|
-| 1. Agent Orchestrator | Done | `agents/AgentOrchestrator.kt` — multi-step think/approve/execute loop with budgets |
-| 2. AI Gateway | Done | `gateway/` — coordinator, router, fallback, health, usage |
+| 1. Agent Orchestrator | Implemented; CI pending | Evidence-driven state machine, approval, checkpoint, cancellation and limits |
+| 2. AI Gateway | Contracts implemented; live adapters pending | Live capability contracts and approved cross-provider fallback |
 | 3. Tool Runtime | Done | `tools/` — 23 typed tools with risk levels and timeouts |
 | 4. Approval Engine | Done + audit | `agents/ApprovalEngine.kt` + `ApprovalAuditLog.kt` |
 | 5. SandboxBackend abstraction | Done | `sandbox/backend/` — config, capabilities, models, error types |
 | 6. LocalProotSandboxBackend | Done | `sandbox/backend/LocalProotSandboxBackend.kt` — wraps PRoot shell/executor |
-| 7. RemoteSandboxBackend | Done | `sandbox/remote/RemoteSandboxBackend.kt` — Ktor client over gateway protocol |
+| 7. RemoteSandboxBackend | Experimental client only | REST client exists; WebSocket stdin/streaming and a hardened server are not yet verified |
 | 8. Sandbox Provider | Done | `sandbox/remote/SandboxProvider.kt` — Incus-ready VM lifecycle |
 | 9. Gateway protocol | Done | `docs/SANDBOX_GATEWAY_PROTOCOL.md` |
 | 10. Debian 13 production default | Done | `linux/LinuxDistro.kt` Debian default + verified arm64 rootfs asset |
-| 11. Chat-integrated terminal | Done | `chat/composables/TerminalPanel.kt` + `WorkspacePanel.kt` |
+| 11. Chat-integrated terminal | Implemented; device probe pending | Shared conversation session with real command input/cancel/transcript |
 | 12. Secrets hardening | Done | `security/SecretStore.kt` — keystore-backed, no legacy keys |
 | 13. Redaction + cancellation safety | Done | `logging/` + CancellationException guards (10 sites) |
 | 14. OpenAI Compatible UI | Done | `settings/ServicesSettings.kt` — presets, model refresh, count |
-| 15. Tests | Done | 927 unit tests passing (0 failures) |
+| 15. Tests | CI pending | Test declarations exist; the published CI result is authoritative |
 
 Current architecture supersedes the earlier Ubuntu-local experiment: the production on-device contract is Debian 13 Trixie arm64. Remote sandbox providers may continue using their own Ubuntu VM images.

@@ -46,14 +46,23 @@
 ### 2.5 UsageRecorder
 سجل طلبات (tokens، نجاح، تكلفة تقديرية) مع نافذة اليوم/الشهر وفحص سقف ميزانية شهري وسقف 5000 سجل.
 
+### 2.6 Live capabilities and provider boundaries
+
+`ProviderCapabilityProber` accepts a capability only with live interaction or
+live discovery evidence and records latency, usage and cost without request
+content. `ProviderTransferApprovalGate` is fail-closed: the real repository
+fallback loop cannot send conversation history to a different provider without
+an `ApprovedOnce` decision. Same-provider retries do not cross this boundary.
+
 ## 3. Agent Runtime (`agents/`)
 
-- **AgentRun** / **AgentStep**: كل خطوة (أداة/نص/موافقة) تُسجل مع cost وduration.
+- **AgentRun** / **AgentStep**: كل خطوة (أداة/نص/موافقة) تُسجل مع cost وduration وcheckpoint.
 - **ApprovalEngine**: `decide(toolId, risk, mode, args)`:
   - أداة مجهولة → `NeedsApproval` دائمًا (Anti-Injection).
   - `isDestructiveGit()` يحظر `reset --hard`، `clean -fd`، force push.
   - الأنماط: Safe (كل شيء)، Balanced (reads/writes محلي تلقائي)، Autonomous (كل شيء ما عدا Dangerous).
 - **AgentRunStore**: يحفظ runs وpending approvals في settings.
+- **AgentOrchestrator**: آلة حالات محدودة بالوقت والخطوات والتكلفة، مع cancellation وloop detection وretries محدودة. لا تقبل التسليم بعد تعديل المشروع إلا بعد test ناجح وdiff حقيقيين.
 
 ## 4. Security (`security/`)
 
@@ -72,11 +81,11 @@
 
 ### 5.1 محادثة التطوير وSandbox المباشر
 
-عندما تكون `execute_shell_command` متاحة، يضيف system prompt عقد `/workspace` فقط حين تُرسل الأداة فعليًا إلى النموذج. لكل محادثة Shell مستمرة مستقلة، بينما ملفات Debian و`/workspace` مشتركة مع Moataz Code. أوامر النموذج ومخرجاتها تضاف إلى transcript محفوظ وتظهر في `TerminalPanel` مباشرة داخل شاشة المحادثة. الأداة `workspace_import_project` تستورد مستودع GitHub عامًا عبر HTTPS أو أرشيفًا سبق أن وضعته `analyze_file` في `/root/uploads`؛ ولا تستبدل مشروعًا قائمًا، كما ترفض traversal والروابط وحدود archive غير الآمنة.
+عندما تكون `execute_shell_command` متاحة، يضيف system prompt عقد `/workspace` فقط حين تُرسل الأداة فعليًا إلى النموذج. لكل محادثة Shell مستمرة مستقلة، بينما ملفات Debian و`/workspace` مشتركة مع Moataz Code. أوامر النموذج ومخرجاتها تضاف إلى transcript محفوظ وتظهر في `TerminalPanel` مباشرة داخل شاشة المحادثة، ويمكن للمستخدم تشغيل أمر وإلغائه من اللوحة نفسها. تدعم خدمة الاستيراد GitHub العام والخاص عبر HTTPS وأرشيفات ZIP/TAR المرفوعة، باستخدام staging ذري وحدود traversal/links/size/count.
 
 ## 6. Testing
 
-`composeApp/src/commonTest` — 450+ اختبارًا يغطي Gateway وRouter وApproval وUsage وMarkdown وغيرها، تُشغَّل عبر `:composeApp:testAndroid` (Android Host Test).
+يحتوي `commonTest` و`androidHostTest` حاليًا أكثر من 1000 إعلان اختبار. العدد لا يعني النجاح؛ الدليل المعتمد هو نتيجة `:composeApp:testAndroid` على commit المنشور.
 
 ## 7. Local development runtime
 
