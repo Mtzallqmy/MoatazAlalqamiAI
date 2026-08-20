@@ -22,7 +22,7 @@ private val ALPINE_MIRRORS = listOf(
 
 private const val LXC_INDEX = "https://images.linuxcontainers.org/meta/1.0/index-user"
 private const val LXC_BASE = "https://images.linuxcontainers.org"
-private const val DEBIAN_RELEASE = "bookworm"
+private const val DEBIAN_RELEASE = "trixie"
 
 /**
  * The per-distribution facts the shared installer and proot launcher need:
@@ -127,22 +127,18 @@ object DebianSpec : DistroSpec {
     }
 
     /**
-     * Newest default image for this device's architecture, e.g.
-     * `debian;bookworm;arm64;default;20260731_05:24;/images/debian/bookworm/arm64/default/20260731_05:24/`.
+     * Newest Debian 13 (trixie) image for this device architecture.
      *
      * Resolution order for arm64 devices:
-     * 1. Pre-built rootfs hosted on this repo's GitHub Releases (guaranteed
-     *    availability, pre-installed base packages + OpenCode) — tried first.
-     * 2. LXC index for the newest default image.
-     * 3. Hardcoded recent LXC build as a last resort.
-     *
-     * Non-arm64 devices skip the GitHub asset and go straight to LXC.
+     * 1. The v4.2.0 production rootfs release asset, pre-installed with the
+     *    lightweight CLI base and OpenCode.
+     * 2. LXC index for the newest trixie default image.
+     * 3. A recent LXC image as a last-resort fallback when the index is offline.
      */
     override fun rootfsUrls(): List<String> {
         val arch = arch()
         val githubAssetUrl = when {
-            arch == "arm64" -> "https://github.com/Mtzallqmy/MoatazAlalqamiAI/releases/download/v4.1.0/moataz-debian-rootfs-arm64.tar.xz"
-            arch == "amd64" -> "https://github.com/Mtzallqmy/MoatazAlalqamiAI/releases/download/v4.1.0/moataz-debian-rootfs-x86_64.tar.xz"
+            arch == "arm64" -> "https://github.com/Mtzallqmy/MoatazAlalqamiAI/releases/download/v4.2.0/moataz-debian-rootfs-arm64-v13.tar.xz"
             else -> null
         }
         val fallbackPath = "/images/debian/$DEBIAN_RELEASE/$arch/default/20260818_05:24/rootfs.tar.xz"
@@ -156,8 +152,6 @@ object DebianSpec : DistroSpec {
                 ?: throw IOException("Malformed LXC index line: $line")
             listOf(LXC_BASE + path.removeSuffix("/") + "/rootfs.tar.xz")
         } catch (_: Exception) {
-            // Index unreachable — use the hardcoded fallback which is always pinned
-            // to a recent, verified build for this architecture.
             listOf(LXC_BASE + fallbackPath)
         }
         return if (githubAssetUrl != null) listOf(githubAssetUrl) + lxcCandidates else lxcCandidates
@@ -178,25 +172,14 @@ object DebianSpec : DistroSpec {
             "run/lock",
             "tmp",
         ).forEach { File(rootfsDir, it).mkdirs() }
-        // usr-merge repair: on some devices the tar extractor cannot recreate the
-        // root-level symlinks (bin -> usr/bin, sbin -> usr/sbin, lib -> usr/lib),
-        // so proot fails every command with "/bin/sh not found". Re-create any
-        // missing or broken ones and copy dash into place as a real /bin/sh file
-        // as a last resort — proot only needs a working shell.
+        // Debian 13 is fully usr-merged. Repair root-level symlinks if Android's
+        // extraction path did not preserve them, then guarantee /bin/sh exists.
         repairUsrMergeSymlinks(rootfsDir)
         ensureWorkingShell(rootfsDir)
-        // dpkg fsyncs every unpacked file by default, which on a phone turns a
-        // base install into a multi-minute affair.
         File(rootfsDir, "etc/dpkg/dpkg.cfg.d").mkdirs()
         File(rootfsDir, "etc/dpkg/dpkg.cfg.d/force-unsafe-io").writeText("force-unsafe-io\n")
     }
 
-    /**
-     * Fixes usr-merge root symlinks that the extractor could not recreate.
-     * Debian bookworm is fully usr-merged, so /bin, /sbin and /lib are symlinks
-     * into /usr — if any of them is missing or a broken link, proot cannot even
-     * exec `/bin/sh`. Recreate each one pointing at its usr/ counterpart.
-     */
     private fun repairUsrMergeSymlinks(rootfsDir: File) {
         for ((linkPath, target) in listOf("bin" to "usr/bin", "sbin" to "usr/sbin", "lib" to "usr/lib")) {
             val link = File(rootfsDir, linkPath)
@@ -218,12 +201,6 @@ object DebianSpec : DistroSpec {
         }
     }
 
-    /**
-     * Guarantees an executable `/bin/sh` exists on the rootfs: if /bin is still
-     * broken after symlink repair, copy dash directly into /bin/sh so proot can
-     * exec a shell at the canonical path. Dash is small (~130KB) and fully
-     * compatible with what the installer runs (`/bin/sh -c ...`).
-     */
     private fun ensureWorkingShell(rootfsDir: File) {
         val sh = File(rootfsDir, "bin/sh")
         val works = sh.exists() && sh.canonicalFile.exists()
@@ -250,16 +227,7 @@ object DebianSpec : DistroSpec {
 }
 
 /**
- * Ubuntu 26.04 LTS (Noble) — fetched from Ubuntu Cloud Images (the same
- * tarballs Canonical ships for cloud instances). Unlike the Debian LXC path
- * these archives are architecture-specific and already contain a working apt
- * with the `universe` repository enabled.
- *
- * Resolution order:
- * 1. Pre-built rootfs hosted on this repo's GitHub Releases (guaranteed
- *    availability, pre-installed base packages + OpenCode) — tried first.
- * 2. Ubuntu Cloud Images release tarball (Canonical CDN, always available).
- * 3. LXC index as a last resort.
+ * Ubuntu 26.04 LTS — retained as an optional compatibility environment.
  */
 object UbuntuSpec : DistroSpec {
 
@@ -287,7 +255,6 @@ object UbuntuSpec : DistroSpec {
             arch == "amd64" -> "https://github.com/Mtzallqmy/MoatazAlalqamiAI/releases/download/v4.1.0/moataz-ubuntu-rootfs-x86_64.tar.xz"
             else -> null
         }
-        // Ubuntu Cloud Images release tarballs — Canonical CDN, always available.
         val cdnUrl = "https://cloud-images.ubuntu.com/releases/$UBUNTU_RELEASE/release/ubuntu-$UBUNTU_RELEASE-server-cloudimg-$arch-root.tar.gz"
         val lxcUrl = "$LXC_BASE/images/ubuntu/$UBUNTU_RELEASE/$arch/default/latest/rootfs.tar.xz"
         return buildList {
@@ -300,8 +267,6 @@ object UbuntuSpec : DistroSpec {
     override fun configure(rootfsDir: File) {
         TarExtractor.makeWritable(rootfsDir)
         TarExtractor.writeResolvConf(rootfsDir)
-        // Ubuntu cloud images ship empty dirs for some apt state paths that
-        // the tar extractor skips; recreate them so apt can bootstrap.
         listOf(
             "var/lib/apt/lists/partial",
             "var/cache/apt/archives/partial",
@@ -312,20 +277,12 @@ object UbuntuSpec : DistroSpec {
             "run/lock",
             "tmp",
         ).forEach { File(rootfsDir, it).mkdirs() }
-        // usr-merge repair: same safeguard as Debian — recreate root-level
-        // usr-merge symlinks the extractor could not restore and fall back to a
-        // real /bin/sh file so proot can always exec a shell.
         repairUsrMergeSymlinks(rootfsDir)
         ensureWorkingShell(rootfsDir)
-        // dpkg fsyncs every unpacked file by default — deadly on flash storage.
         File(rootfsDir, "etc/dpkg/dpkg.cfg.d").mkdirs()
         File(rootfsDir, "etc/dpkg/dpkg.cfg.d/force-unsafe-io").writeText("force-unsafe-io\n")
     }
 
-    /**
-     * Fixes usr-merge root symlinks that the extractor could not recreate —
-     * see the Debian implementation for details.
-     */
     private fun repairUsrMergeSymlinks(rootfsDir: File) {
         for ((linkPath, target) in listOf("bin" to "usr/bin", "sbin" to "usr/sbin", "lib" to "usr/lib")) {
             val link = File(rootfsDir, linkPath)
@@ -347,10 +304,6 @@ object UbuntuSpec : DistroSpec {
         }
     }
 
-    /**
-     * Guarantees an executable `/bin/sh` exists on the rootfs — see the Debian
-     * implementation for details.
-     */
     private fun ensureWorkingShell(rootfsDir: File) {
         val sh = File(rootfsDir, "bin/sh")
         val works = sh.exists() && sh.canonicalFile.exists()
