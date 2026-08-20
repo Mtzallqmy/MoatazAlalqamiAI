@@ -19,7 +19,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
-import kotlin.time.Duration.ZERO
+import kotlin.time.Duration.Companion.milliseconds
 
 class AgentOrchestratorTest {
     @Test
@@ -226,7 +226,7 @@ class AgentOrchestratorTest {
             approvalMode = { ApprovalMode.Balanced },
             llm = llm,
             scope = this,
-            recoveryPolicy = RecoveryPolicy(retryDelay = ZERO),
+            recoveryPolicy = RecoveryPolicy(retryDelay = 0.milliseconds),
             callTool = { _, _ -> ToolResult.Success() },
         )
         val id = orchestrator.startRun(config().copy(maxDurationMs = 100), "time limit")
@@ -262,7 +262,7 @@ class AgentOrchestratorTest {
                 final("observed"),
             ),
             scope = this,
-            recoveryPolicy = RecoveryPolicy(retryDelay = ZERO),
+            recoveryPolicy = RecoveryPolicy(retryDelay = 0.milliseconds),
             callTool = { _, _ -> ToolResult.Success(message = "observed") },
         )
         assertEquals(RunStatus.Paused, orchestrator.runs.value.getValue(saved.id).status)
@@ -286,7 +286,7 @@ class AgentOrchestratorTest {
             approvalMode = { mode },
             llm = llm,
             scope = this,
-            recoveryPolicy = RecoveryPolicy(retryDelay = ZERO),
+            recoveryPolicy = RecoveryPolicy(retryDelay = 0.milliseconds),
             callTool = call,
         )
     }
