@@ -198,7 +198,7 @@ object DebianSpec : DistroSpec {
      * exec `/bin/sh`. Recreate each one pointing at its usr/ counterpart.
      */
     private fun repairUsrMergeSymlinks(rootfsDir: File) {
-        for ((linkPath, target) in listOf("bin" to "usr/bin", "sbin" to "usr/sbin", "lib" to "usr/lib")) {
+        for ((linkPath, target) in listOf("bin" to "usr/bin", "sbin" to "usr/sbin", "lib" to "usr/lib", "lib64" to "usr/lib64")) {
             val link = File(rootfsDir, linkPath)
             val targetFile = File(rootfsDir, target)
             val broken = link.exists() && (link.canonicalFile != link.absoluteFile || !link.canonicalFile.exists())
@@ -220,20 +220,31 @@ object DebianSpec : DistroSpec {
 
     /**
      * Guarantees an executable `/bin/sh` exists on the rootfs: if /bin is still
-     * broken after symlink repair, copy dash directly into /bin/sh so proot can
-     * exec a shell at the canonical path. Dash is small (~130KB) and fully
-     * compatible with what the installer runs (`/bin/sh -c ...`).
+     * broken after symlink repair, copy the embedded `bin/sh.real` (static
+     * busybox) or dash directly into /bin/sh so proot can exec a shell at the
+     * canonical path. Fully compatible with what the installer runs
+     * (`/bin/sh -c ...`).
      */
     private fun ensureWorkingShell(rootfsDir: File) {
         val sh = File(rootfsDir, "bin/sh")
         val works = sh.exists() && sh.canonicalFile.exists()
+        // Embedded rootfs ships `bin/sh.real` — a real busybox-static copy
+        // (static-pie, needs no libc/linker symlinks) so proot always has a
+        // shell even if every symlink was lost during extraction. Fall back
+        // to dash (real ELF) afterwards.
+        val fallbacks = listOf("bin/sh.real", "usr/bin/sh.real", "usr/bin/dash")
         if (!works) {
-            val dash = File(rootfsDir, "usr/bin/dash")
-            if (dash.exists()) {
-                sh.parentFile?.mkdirs()
-                if (sh.exists()) sh.delete()
-                dash.copyTo(sh, overwrite = true)
-                sh.setExecutable(true, false)
+            for (fb in fallbacks) {
+                val src = File(rootfsDir, fb)
+                if (src.exists()) {
+                    sh.parentFile?.mkdirs()
+                    if (sh.exists()) sh.delete()
+                    runCatching { src.copyTo(sh, overwrite = true) }
+                    if (sh.exists()) {
+                        sh.setExecutable(true, false)
+                        break
+                    }
+                }
             }
         }
     }
@@ -327,7 +338,7 @@ object UbuntuSpec : DistroSpec {
      * see the Debian implementation for details.
      */
     private fun repairUsrMergeSymlinks(rootfsDir: File) {
-        for ((linkPath, target) in listOf("bin" to "usr/bin", "sbin" to "usr/sbin", "lib" to "usr/lib")) {
+        for ((linkPath, target) in listOf("bin" to "usr/bin", "sbin" to "usr/sbin", "lib" to "usr/lib", "lib64" to "usr/lib64")) {
             val link = File(rootfsDir, linkPath)
             val targetFile = File(rootfsDir, target)
             val broken = link.exists() && (link.canonicalFile != link.absoluteFile || !link.canonicalFile.exists())
@@ -354,13 +365,23 @@ object UbuntuSpec : DistroSpec {
     private fun ensureWorkingShell(rootfsDir: File) {
         val sh = File(rootfsDir, "bin/sh")
         val works = sh.exists() && sh.canonicalFile.exists()
+        // Embedded rootfs ships `bin/sh.real` — a real busybox-static copy
+        // (static-pie, needs no libc/linker symlinks) so proot always has a
+        // shell even if every symlink was lost during extraction. Fall back
+        // to dash (real ELF) afterwards.
+        val fallbacks = listOf("bin/sh.real", "usr/bin/sh.real", "usr/bin/dash")
         if (!works) {
-            val dash = File(rootfsDir, "usr/bin/dash")
-            if (dash.exists()) {
-                sh.parentFile?.mkdirs()
-                if (sh.exists()) sh.delete()
-                dash.copyTo(sh, overwrite = true)
-                sh.setExecutable(true, false)
+            for (fb in fallbacks) {
+                val src = File(rootfsDir, fb)
+                if (src.exists()) {
+                    sh.parentFile?.mkdirs()
+                    if (sh.exists()) sh.delete()
+                    runCatching { src.copyTo(sh, overwrite = true) }
+                    if (sh.exists()) {
+                        sh.setExecutable(true, false)
+                        break
+                    }
+                }
             }
         }
     }
