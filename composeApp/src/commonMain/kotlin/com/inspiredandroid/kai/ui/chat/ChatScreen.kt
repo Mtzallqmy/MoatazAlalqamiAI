@@ -548,6 +548,9 @@ private fun ChatModeScreen(
         if (sandboxController != null && id != null) sandboxController.transcriptFor(id) else null
     }
     var inlineTerminalMinimized by rememberSaveable(uiState.currentConversationId) { mutableStateOf(false) }
+    var inlineTerminalHandle by remember(uiState.currentConversationId) {
+        mutableStateOf<com.inspiredandroid.kai.CommandHandle?>(null)
+    }
     LaunchedEffect(isShellExecuting) {
         if (isShellExecuting) inlineTerminalMinimized = false
     }
@@ -950,6 +953,40 @@ private fun ChatModeScreen(
                         lines = liveTerminalLines,
                         minimized = inlineTerminalMinimized,
                         onToggleMinimize = { inlineTerminalMinimized = !inlineTerminalMinimized },
+                        commandRunning = inlineTerminalHandle != null,
+                        onSubmitCommand = { command ->
+                            val sessionId = uiState.currentConversationId
+                            val controller = sandboxController
+                            if (sessionId != null && controller != null) {
+                                componentScope.launch {
+                                    try {
+                                        val handle = controller.executeCommandStreaming(
+                                            command = command,
+                                            onStdout = {},
+                                            onStderr = {},
+                                            sessionId = sessionId,
+                                        )
+                                        inlineTerminalHandle = handle
+                                        try {
+                                            handle.awaitExit()
+                                        } finally {
+                                            if (inlineTerminalHandle === handle) inlineTerminalHandle = null
+                                        }
+                                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                        throw cancelled
+                                    } catch (failure: Exception) {
+                                        liveTerminalLines.add(
+                                            TerminalLine.Error(
+                                                com.inspiredandroid.kai.runtime.RuntimeDiagnosticRedactor.redact(
+                                                    failure.message ?: failure::class.simpleName ?: "Terminal command failed",
+                                                ),
+                                            ),
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        onCancelCommand = { inlineTerminalHandle?.cancel() },
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                     )
                 }
