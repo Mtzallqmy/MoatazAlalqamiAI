@@ -1,0 +1,135 @@
+name: Production ARM64 Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release-arm64:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up arm64 emulation
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Install host release tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xz-utils unzip
+          yes | sdkmanager "ndk;29.0.14206865"
+
+      - name: Build Debian 13 arm64 rootfs
+        run: |
+          chmod +x scripts/build-debian-rootfs.sh
+          scripts/build-debian-rootfs.sh
+
+      - name: Validate rootfs archive
+        run: |
+          ROOTFS=androidApp/src/main/assets/moataz-debian-rootfs-arm64-v13.tar.xz
+          xz -t "$ROOTFS"
+          tar -tJf "$ROOTFS" | grep -E '(^|/)etc/os-release$'
+          tar -tJf "$ROOTFS" | grep -E '(^|/)usr/bin/python3$'
+          tar -tJf "$ROOTFS" | grep -E '(^|/)usr/bin/pgrep$'
+          tar -tJf "$ROOTFS" | grep -E '(^|/)root/.opencode/bin/opencode$'
+
+      - name: Prepare production signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${ANDROID_KEYSTORE_BASE64:-}" && -n "${ANDROID_KEYSTORE_PASSWORD:-}" && -n "${ANDROID_KEY_ALIAS:-}" ]]; then
+            KEYSTORE="$RUNNER_TEMP/moataz-release.keystore"
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
+            echo "KEYSTORE_FILE=$KEYSTORE" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "KEY_ALIAS=$ANDROID_KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}" >> "$GITHUB_ENV"
+            echo "RELEASE_SIGNED=true" >> "$GITHUB_ENV"
+          else
+            echo "RELEASE_SIGNED=false" >> "$GITHUB_ENV"
+            if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+              echo "Tagged production releases require Android signing secrets." >&2
+              exit 1
+            fi
+            echo "Manual run will produce an unsigned QA release artifact."
+          fi
+
+      - name: Run Android tests
+        run: ./gradlew :composeApp:testAndroid --no-daemon --stacktrace
+
+      - name: Build FOSS arm64 release
+        run: ./gradlew :androidApp:assembleFossRelease --no-daemon --stacktrace
+
+      - name: Verify APK contents and signature
+        run: |
+          set -euo pipefail
+          APK="$(find androidApp/build/outputs/apk/foss/release -type f -name '*.apk' | head -1)"
+          test -n "$APK"
+          echo "APK=$APK" >> "$GITHUB_ENV"
+
+          unzip -Z1 "$APK" | grep '^lib/arm64-v8a/libproot.so$'
+          unzip -Z1 "$APK" | grep '^lib/arm64-v8a/libproot-loader.so$'
+          unzip -Z1 "$APK" | grep '^lib/arm64-v8a/libtalloc.so$'
+          unzip -Z1 "$APK" | grep '^assets/moataz-debian-rootfs-arm64-v13.tar.xz$'
+
+          if unzip -Z1 "$APK" | grep -Eq '^lib/(armeabi-v7a|x86|x86_64)/'; then
+            echo "Non-arm64 native libraries found in production APK" >&2
+            exit 1
+          fi
+
+          if [[ "$RELEASE_SIGNED" == "true" ]]; then
+            APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+            "$APKSIGNER" verify --verbose --print-certs "$APK"
+          fi
+
+      - name: Stage release files
+        run: |
+          set -euo pipefail
+          VERSION="$(grep '^appVersion' gradle/libs.versions.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+          mkdir -p dist
+          cp "$APK" "dist/MoatazAlalqamiAI-v${VERSION}-arm64.apk"
+          cp androidApp/src/main/assets/moataz-debian-rootfs-arm64-v13.tar.xz \
+            "dist/moataz-debian13-rootfs-arm64-v${VERSION}.tar.xz"
+          (cd dist && sha256sum * > SHA256SUMS)
+          ls -lh dist
+
+      - name: Upload verified release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MoatazAlalqamiAI-arm64-release
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "Moataz Alalqami AI $GITHUB_REF_NAME — ARM64" \
+            --generate-notes
