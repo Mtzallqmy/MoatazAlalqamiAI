@@ -24,11 +24,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * On-device Debian 13 backend running through PRoot.
  *
- * Lifecycle, filesystem mapping and ordinary shell sessions remain delegated to
- * [LinuxSandboxManager]. Commands that explicitly request [ExecRequest.pty]
- * use the shared raw PTY bridge so interactive AI/TUI programs get a real TTY,
- * window size updates and byte-oriented stdin instead of a pipe that appears to
- * hang waiting for terminal capabilities.
+ * Lifecycle, filesystem mapping and ordinary one-shot commands remain delegated
+ * to [LinuxSandboxManager]. Streaming commands use the shared raw PTY bridge by
+ * default because this API is the interactive terminal path (it exposes input
+ * and cancel), so AI/TUI CLIs receive a real terminal instead of pipes.
  */
 class LocalProotSandboxBackend(
     private val sandboxManager: LinuxSandboxManager,
@@ -42,12 +41,8 @@ class LocalProotSandboxBackend(
     override val state: StateFlow<SandboxState> = _state
     fun currentState(): SandboxState = _state.value
 
-    /** Logical sandbox id -> session id inside the manager's shell registry. */
     private val sessions = ConcurrentHashMap<String, String>()
-
-    /** Logical sandbox id -> running streaming handles. */
     private val runningHandles = ConcurrentHashMap<String, MutableList<CommandHandle>>()
-
     private val idCounter = java.util.concurrent.atomic.AtomicInteger(0)
 
     init {
@@ -152,7 +147,11 @@ class LocalProotSandboxBackend(
         listener: ExecStreamListener,
     ): CommandHandle {
         ensureSandbox(sandboxId)
-        val handle: CommandHandle = if (request.pty) {
+        // Local streaming is the interactive path. Prefer a real PTY whenever
+        // this backend advertises one; request.pty remains useful to callers and
+        // other backends, but old ToolRuntime callers need no schema change.
+        val usePty = request.pty || capabilities.pty
+        val handle: CommandHandle = if (usePty) {
             val pty = sandboxManager.createProotExecutor().createPtyExecutor(sandboxManager.tmpPath)
             PtySessionCommandHandle(pty, request, listener)
         } else {
@@ -319,13 +318,11 @@ class LocalProotSandboxBackend(
     private fun isEnvironmentReady(): Boolean =
         sandboxManager.state.value is com.inspiredandroid.kai.sandbox.SandboxState.Ready
 
-    /** Ordinary pipe-based streaming command. */
     private class SessionCommandHandle(
         private val shell: SessionShell,
         private val request: ExecRequest,
         private val listener: ExecStreamListener,
     ) : CommandHandle {
-
         private val cancelled = AtomicBoolean(false)
         private val exit = CompletableDeferred<Int>()
         private val runner = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -373,13 +370,11 @@ class LocalProotSandboxBackend(
             }
     }
 
-    /** Real PTY streaming command for interactive/TUI programs. */
     private class PtySessionCommandHandle(
         private val pty: PtyProotExecutor,
         private val request: ExecRequest,
         private val listener: ExecStreamListener,
     ) : CommandHandle {
-
         private val cancelled = AtomicBoolean(false)
         private val exit = CompletableDeferred<Int>()
         private val runner = CoroutineScope(SupervisorJob() + Dispatchers.IO)
