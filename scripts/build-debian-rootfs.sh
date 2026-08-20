@@ -14,6 +14,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT="${1:-$ROOT/androidApp/src/main/assets/moataz-debian-rootfs-arm64-v13.tar.xz}"
 IMAGE="${DEBIAN_IMAGE:-debian:13-slim}"
+OPENCODE_VERSION="${OPENCODE_VERSION:-1.18.14}"
 CONTAINER="kai-debian13-arm64-${RANDOM}-$$"
 TMP_OUTPUT="${OUTPUT}.tmp"
 
@@ -31,11 +32,12 @@ mkdir -p "$(dirname "$OUTPUT")"
 echo "[rootfs] pulling $IMAGE for linux/arm64"
 docker pull --platform linux/arm64 "$IMAGE" >/dev/null
 
-echo "[rootfs] creating Debian 13 arm64 CLI image"
+echo "[rootfs] creating Debian 13 arm64 CLI image (OpenCode $OPENCODE_VERSION)"
 docker create \
   --platform linux/arm64 \
   --name "$CONTAINER" \
   -e DEBIAN_FRONTEND=noninteractive \
+  -e KAI_OPENCODE_VERSION="$OPENCODE_VERSION" \
   "$IMAGE" \
   /bin/bash -lc '
     set -euo pipefail
@@ -77,14 +79,15 @@ EOF
     # PATH explicitly for the installer and the health probes below.
     export PATH="/root/.local/bin:/root/.grok/bin:/root/.opencode/bin:$PATH"
 
-    # OpenCode is part of the production offline experience. Fail the rootfs
-    # build rather than shipping an image that advertises an unavailable AI CLI.
+    # Pin the AI CLI used by the production image. The official installer
+    # supports --version; retries are transport retries, not version fallbacks.
     for attempt in 1 2 3; do
-      if curl -fsSL --retry 3 --connect-timeout 20 https://opencode.ai/install | bash; then
+      if curl -fsSL --retry 3 --connect-timeout 20 https://opencode.ai/install | \
+          bash -s -- --version "$KAI_OPENCODE_VERSION" --no-modify-path; then
         break
       fi
       if [ "$attempt" -eq 3 ]; then
-        echo "OpenCode installation failed" >&2
+        echo "OpenCode $KAI_OPENCODE_VERSION installation failed" >&2
         exit 1
       fi
       sleep $((attempt * 3))
@@ -102,6 +105,11 @@ EOF
     for c in bash python3 git curl wget tar sha256sum ps pgrep pkill jq rg ssh rsync file opencode; do
       command -v "$c" >/dev/null 2>&1 || { echo "missing CLI: $c" >&2; exit 1; }
     done
+    OPENCODE_ACTUAL="$(opencode --version 2>/dev/null | head -1)"
+    printf %s "$OPENCODE_ACTUAL" | grep -F "$KAI_OPENCODE_VERSION" >/dev/null || {
+      echo "OpenCode version mismatch: expected $KAI_OPENCODE_VERSION, got $OPENCODE_ACTUAL" >&2
+      exit 1
+    }
 
     {
       echo "distribution=debian"
@@ -109,7 +117,7 @@ EOF
       echo "codename=trixie"
       echo "architecture=arm64"
       echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-      echo "opencode_version=$(opencode --version 2>/dev/null | head -1 || true)"
+      echo "opencode_version=$OPENCODE_ACTUAL"
     } >/etc/kai-rootfs-release
 
     apt-get clean
