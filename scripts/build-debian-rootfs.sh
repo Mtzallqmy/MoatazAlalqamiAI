@@ -41,7 +41,7 @@ docker create \
     set -euo pipefail
     apt-get update
     apt-get install -y --no-install-recommends \
-      bash bash-completion ca-certificates curl wget git nano less jq ripgrep \
+      bash bash-completion busybox-static ca-certificates curl wget git nano less jq ripgrep \
       zip unzip tar xz-utils python3 coreutils findutils sed grep procps psmisc \
       openssh-client rsync file
 
@@ -60,6 +60,13 @@ docker create \
       /run/lock \
       /tmp
     chmod 1777 /tmp
+
+    # Real static shell fallback. Android extraction has historically lost
+    # usr-merge symlinks on some devices; PRoot can still boot from sh.real.
+    BUSYBOX="$(command -v busybox)"
+    test -x "$BUSYBOX"
+    cp "$BUSYBOX" /usr/bin/sh.real
+    chmod 0755 /usr/bin/sh.real
 
     cat >/etc/profile.d/kai-build-path.sh <<"EOF"
 # Managed by Kai Build.
@@ -91,6 +98,7 @@ EOF
     test "$(. /etc/os-release; printf %s "$ID")" = debian
     test "$(. /etc/os-release; printf %s "$VERSION_ID")" = 13
     test "$(dpkg --print-architecture)" = arm64
+    test -x /usr/bin/sh.real
     for c in bash python3 git curl wget tar sha256sum ps pgrep pkill jq rg ssh rsync file opencode; do
       command -v "$c" >/dev/null 2>&1 || { echo "missing CLI: $c" >&2; exit 1; }
     done
