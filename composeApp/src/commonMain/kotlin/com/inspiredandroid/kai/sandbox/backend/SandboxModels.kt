@@ -52,6 +52,7 @@ data class ExecRequest(
     val environment: Map<String, String> = emptyMap(),
     val timeout: Duration? = null,
     val stdin: List<String> = emptyList(),
+    /** Request a real terminal for TUI/interactive commands. */
     val pty: Boolean = false,
 )
 
@@ -67,6 +68,16 @@ data class ExecResult(
 interface ExecStreamListener {
     fun onStdout(line: String) {}
     fun onStderr(line: String) {}
+
+    /**
+     * Raw PTY output. Existing line-oriented listeners remain source-compatible;
+     * terminal renderers can override this to preserve ANSI/control sequences and
+     * UTF-8 chunk boundaries in their own incremental decoder.
+     */
+    fun onOutput(data: ByteArray) {
+        onStdout(data.decodeToString())
+    }
+
     fun onExit(exitCode: Int) {}
 }
 
