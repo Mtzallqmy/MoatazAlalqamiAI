@@ -19,7 +19,7 @@ jobs:
       - name: Build & Test
         run: |
           python3 scripts/verify_rootfs.py \
-            androidApp/src/main/assets/moataz-debian-rootfs-arm64.tar.xz \
+            androidApp/src/main/assets \
             androidApp/src/main/assets/moataz-debian-rootfs-arm64.manifest.json
           ./gradlew :composeApp:testAndroid --no-daemon
           ./gradlew :androidApp:assembleFossDebug --no-daemon
@@ -37,7 +37,7 @@ jobs:
           zipinfo -1 "$APK" | grep '^lib/arm64-v8a/libproot-loader.so$'
           zipinfo -1 "$APK" | grep '^lib/arm64-v8a/libtalloc.so$'
           ! zipinfo -1 "$APK" | grep -E '^lib/(x86|x86_64|armeabi-v7a)/'
-          zipinfo -1 "$APK" | grep 'assets/moataz-debian-rootfs-arm64.tar.xz$'
+          zipinfo -1 "$APK" | grep 'assets/moataz-debian-rootfs-arm64.tar.xz.part-'
           zipinfo -1 "$APK" | grep 'assets/moataz-debian-rootfs-arm64.manifest.json$'
           "$AAPT" dump badging "$APK" | grep -E "versionCode='[1-9][0-9]*'"
           "$APKSIGNER" verify --print-certs "$APK" > /tmp/release-certs.txt 2>&1 || true

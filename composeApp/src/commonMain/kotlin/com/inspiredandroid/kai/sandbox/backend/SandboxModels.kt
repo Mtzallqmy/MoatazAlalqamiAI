@@ -38,7 +38,7 @@ data class SandboxInstance(
 data class SandboxState(
     val lifecycle: SandboxLifecycle = SandboxLifecycle.DESTROYED,
     val error: String? = null,
-    val distro: LinuxDistro = LinuxDistro.UBUNTU,
+    val distro: LinuxDistro = LinuxDistro.DEBIAN,
     val progress: Float? = null,
     val statusText: String = "",
     val diskUsageMB: Long = 0,

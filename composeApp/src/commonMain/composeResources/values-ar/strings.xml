@@ -439,7 +439,7 @@
     <string name="kai_build_exit_content_description">الخروج من Moataz Code</string>
     <string name="kai_build_back_content_description">العودة إلى المشاريع</string>
     <string name="kai_build_setup_title">إعداد Linux (تجريبي)</string>
-    <string name="kai_build_setup_description">Moataz Code في مرحلة تجريبية. يعمل Debian Trixie عبر proot داخل هذا التطبيق، مع curl وgit وwget وpython3 وأساسيات أخرى. التثبيت الأول يحمّل حوالي 100 ميجابايت ويحتاج إلى شبكة.</string>
+    <string name="kai_build_setup_description">يتضمن Moataz Runtime نظام Debian 13 وأدوات التطوير الأساسية وOpenCode داخل التطبيق. يتحقق الإعداد من البيئة المضمّنة ويستخرجها؛ لا تُطلب الشبكة إلا لاحقًا للخدمات أو التحديثات عبر الإنترنت.</string>
     <string name="kai_build_setup_agents_title">وكلاء البرمجة</string>
     <string name="kai_build_setup_agents_description">اختر واجهات سطر الأوامر لتثبيتها على النظام الجديد. يمكنك إضافة الباقي لاحقًا.</string>
     <string name="kai_build_setup_install">تثبيت Debian</string>

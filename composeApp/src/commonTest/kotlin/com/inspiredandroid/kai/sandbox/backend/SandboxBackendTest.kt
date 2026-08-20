@@ -25,9 +25,9 @@ class SandboxConfigTest {
     }
 
     @Test
-    fun `default config picks UBUNTU and DEVELOPER policy`() {
+    fun `default config picks Debian and DEVELOPER policy`() {
         val config = SandboxConfig()
-        assertEquals(com.inspiredandroid.kai.linux.LinuxDistro.UBUNTU, config.distro)
+        assertEquals(com.inspiredandroid.kai.linux.LinuxDistro.DEBIAN, config.distro)
         assertEquals(NetworkPolicy.DEVELOPER, config.networkPolicy)
     }
 

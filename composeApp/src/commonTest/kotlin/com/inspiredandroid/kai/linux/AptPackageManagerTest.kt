@@ -105,6 +105,14 @@ class AptPackageManagerTest {
     }
 
     @Test
+    fun `installing several packages keeps separate shell arguments`() {
+        assertEquals(
+            "apt-get install -y --no-install-recommends 'bash' 'ca-certificates' 'python3'",
+            AptPackageManager.installCommand(listOf("bash", "ca-certificates", "python3")),
+        )
+    }
+
+    @Test
     fun `dpkg format asks for the status field parseInstalled filters on`() {
         assertTrue(AptPackageManager.listInstalledCommand.contains("\${db:Status-Abbrev}"))
         assertTrue(AptPackageManager.listInstalledCommand.contains("\${Package}"))
