@@ -7,6 +7,8 @@ package com.inspiredandroid.kai.sandbox.backend
 data class SandboxCapabilities(
     val exec: Boolean = true,
     val streamingExec: Boolean = true,
+    /** Real interactive terminal with raw stdin/stdout and resize support. */
+    val pty: Boolean = false,
     val filesystem: Boolean = true,
     val fileSearch: Boolean = true,
     val processControl: Boolean = true,
@@ -17,12 +19,13 @@ data class SandboxCapabilities(
     val networkPolicy: Boolean = false,
 ) {
     companion object {
-        /** Local PRoot Debian 13 — on-device limits are advisory. */
+        /** Local PRoot Debian 13 with a real PTY bridge. */
         val LOCAL_PROOT = SandboxCapabilities(
+            pty = true,
             idleTimeout = true,
         )
 
-        /** Remote Incus VM via gateway — full set including snapshots and policy. */
+        /** Remote VM capabilities currently advertised by the implemented backend. */
         val REMOTE_VM = SandboxCapabilities(
             snapshots = true,
             idleTimeout = true,
@@ -33,6 +36,7 @@ data class SandboxCapabilities(
         val NONE = SandboxCapabilities(
             exec = false,
             streamingExec = false,
+            pty = false,
             filesystem = false,
             fileSearch = false,
             processControl = false,
