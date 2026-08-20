@@ -72,7 +72,11 @@ jobs:
           CERTS="$RUNNER_TEMP/release-certs.txt"
           "$APKSIGNER" verify --verbose --print-certs "$APK" > "$CERTS"
           cat "$CERTS"
-          grep -q '^Signer #1 certificate DN:' "$CERTS"
+          # apksigner output differs by build-tools version: current releases
+          # prefix certificate lines with "V2 Signer", older ones with
+          # "Signer #1". Require a certificate DN without coupling CI to the
+          # cosmetic prefix.
+          grep -Eq '^(V[0-9]+ Signer|Signer #[0-9]+).*certificate DN:' "$CERTS"
           grep -q 'CN=Moataz CI Release' "$CERTS"
           ! grep -qi 'Android Debug' "$CERTS"
       - name: Upload APK
