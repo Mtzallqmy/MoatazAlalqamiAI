@@ -46,6 +46,7 @@ jobs:
 
       - name: Validate rootfs archive
         run: |
+          set -euo pipefail
           ROOTFS=androidApp/src/main/assets/moataz-debian-rootfs-arm64-v13.tar.xz
           xz -t "$ROOTFS"
           tar -tJf "$ROOTFS" | grep -E '(^|/)etc/os-release$'
@@ -110,10 +111,11 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="$(grep '^appVersion' gradle/libs.versions.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+          ROOTFS_NAME="moataz-debian-rootfs-arm64-v13.tar.xz"
           mkdir -p dist
           cp "$APK" "dist/MoatazAlalqamiAI-v${VERSION}-arm64.apk"
-          cp androidApp/src/main/assets/moataz-debian-rootfs-arm64-v13.tar.xz \
-            "dist/moataz-debian13-rootfs-arm64-v${VERSION}.tar.xz"
+          cp "androidApp/src/main/assets/$ROOTFS_NAME" "dist/$ROOTFS_NAME"
+          test -s "dist/$ROOTFS_NAME"
           (cd dist && sha256sum * > SHA256SUMS)
           ls -lh dist
 
@@ -130,6 +132,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          test -s dist/moataz-debian-rootfs-arm64-v13.tar.xz
           gh release create "$GITHUB_REF_NAME" dist/* \
             --title "Moataz Alalqami AI $GITHUB_REF_NAME — ARM64" \
             --generate-notes
