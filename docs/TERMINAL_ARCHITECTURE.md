@@ -1,5 +1,9 @@
 # Moataz Terminal Architecture
 
+## Chat terminal
+
+The chat path and Moataz Code share the Debian installation and `/workspace`, but each conversation owns a persistent shell session and transcript. `execute_shell_command` starts at `/workspace`; its command, stdout, and stderr stream into the inline `TerminalPanel`, which automatically expands while a shell tool is running and remains available afterward. This pipe-backed chat shell is optimized for observable agent commands; the Moataz Code screen remains the true-PTY surface for fullscreen and raw-mode applications.
+
 The existing PTY and VT implementation is retained. `BuildProotExecutor` creates
 a real guest PTY, forwards raw UTF-8 bytes, applies `TIOCSWINSZ`, and signals
 `SIGWINCH`. `TerminalScreen`/`VtParser` already handle cursor control, alternate

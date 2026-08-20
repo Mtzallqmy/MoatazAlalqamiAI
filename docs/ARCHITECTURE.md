@@ -28,6 +28,10 @@
 - رفض أي URL يحوي `user:pass@` أو `?key=...` قبل الإرسال.
 - تبديل http→https للمزودات الإنتاجية.
 
+### 2.1.1 تشخيص المزود والنموذج
+
+زر **تشغيل التشخيص الكامل** هو probe صريح يستهلك طلبًا صغيرًا ولا يعمل دوريًا. ينفذ أربع مراحل منفصلة: المصادقة/الاتصال، اكتشاف النماذج، completion حقيقي للنموذج المختار، ثم function-call خامل باسم `moataz_runtime_probe`. لذلك لا تعني استجابة endpoint وحدها أن النموذج قادر على تنفيذ أدوات؛ واجهة الإعدادات تعرض صراحةً إما «جاهز للمحادثة وأدوات بيئة العمل» أو «محادثة فقط». لا تُحفظ مفاتيح API أو تُدرج في تقرير التشخيص.
+
 ### 2.2 ModelMetadata + Pricing
 `ModelCapabilityCatalog`: طبقة قدرات يدوية فوق `ModelCatalog` المكتشف — supportsVision، supportsToolCalling، supportsReasoning، isLocal، pricing لكل مليون توكن، speed/quality tiers.
 
@@ -65,6 +69,10 @@
 3. `ProviderHealthRegistry.isUnhealthy()` → fallback إن لزم.
 4. `RemoteDataRepository` يجلب apiKey من `ProviderCredentialsResolver` → Ktor/OkHttp → stream.
 5. `UsageRecorder.record()` + تحديث health عند أخطاء.
+
+### 5.1 محادثة التطوير وSandbox المباشر
+
+عندما تكون `execute_shell_command` متاحة، يضيف system prompt عقد `/workspace` فقط حين تُرسل الأداة فعليًا إلى النموذج. لكل محادثة Shell مستمرة مستقلة، بينما ملفات Debian و`/workspace` مشتركة مع Moataz Code. أوامر النموذج ومخرجاتها تضاف إلى transcript محفوظ وتظهر في `TerminalPanel` مباشرة داخل شاشة المحادثة. الأداة `workspace_import_project` تستورد مستودع GitHub عامًا عبر HTTPS أو أرشيفًا سبق أن وضعته `analyze_file` في `/root/uploads`؛ ولا تستبدل مشروعًا قائمًا، كما ترفض traversal والروابط وحدود archive غير الآمنة.
 
 ## 6. Testing
 

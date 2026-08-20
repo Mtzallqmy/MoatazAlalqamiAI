@@ -14,6 +14,8 @@ import com.inspiredandroid.kai.data.ScheduledTask
 import com.inspiredandroid.kai.data.Service
 import com.inspiredandroid.kai.data.ServiceEntry
 import com.inspiredandroid.kai.data.ServiceInstance
+import com.inspiredandroid.kai.data.ProviderDiagnosticReport
+import com.inspiredandroid.kai.data.DiagnosticCheck
 import com.inspiredandroid.kai.data.SmsDraft
 import com.inspiredandroid.kai.data.SmsSyncState
 import com.inspiredandroid.kai.data.SystemPromptVariant
@@ -183,6 +185,21 @@ class FakeDataRepository : DataRepository {
     override suspend fun validateConnection(service: Service, instanceId: String) {
         // No-op in tests
     }
+
+    var diagnosticReport: ProviderDiagnosticReport? = null
+    override suspend fun diagnoseProvider(instanceId: String): ProviderDiagnosticReport = diagnosticReport
+        ?: ProviderDiagnosticReport(
+            instanceId = instanceId,
+            providerName = "Fake",
+            modelId = "fake-model",
+            endpoint = "https://example.invalid/v1/chat/completions",
+            connection = DiagnosticCheck.passed("Connected"),
+            modelDiscovery = DiagnosticCheck.passed("Models", 1),
+            chatCompletion = DiagnosticCheck.passed("Chat"),
+            toolCalling = DiagnosticCheck.passed("Tools"),
+            latencyMs = 1,
+            checkedAtEpochMs = 1,
+        )
 
     fun setConfiguredServices(vararg services: Service) {
         configuredInstances.clear()

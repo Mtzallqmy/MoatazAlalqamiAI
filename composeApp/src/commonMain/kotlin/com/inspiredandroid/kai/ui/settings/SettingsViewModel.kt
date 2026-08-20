@@ -151,6 +151,7 @@ class SettingsViewModel(
         onChangeBaseUrl = ::onChangeBaseUrl,
         onSelectModel = ::onSelectModel,
         onRefreshModels = ::onRefreshModels,
+        onDiagnoseProvider = ::onDiagnoseProvider,
         onToggleUseCustomModel = ::onToggleUseCustomModel,
         onChangeCustomModelId = ::onChangeCustomModelId,
         onToggleTool = ::onToggleTool,
@@ -350,10 +351,14 @@ class SettingsViewModel(
 
     private fun refreshServiceList() {
         _state.update { current ->
-            val existingStatuses = current.configuredServices.associate { it.instanceId to it.connectionStatus }
+            val existingEntries = current.configuredServices.associateBy { it.instanceId }
             val newEntries = buildConfiguredServiceEntries().map { entry ->
-                val preservedStatus = existingStatuses[entry.instanceId]
-                if (preservedStatus != null) entry.copy(connectionStatus = preservedStatus) else entry
+                val previous = existingEntries[entry.instanceId]
+                if (previous != null) entry.copy(
+                    connectionStatus = previous.connectionStatus,
+                    isDiagnosing = previous.isDiagnosing,
+                    diagnostic = previous.diagnostic,
+                ) else entry
             }
             current.copy(
                 configuredServices = newEntries.toImmutableList(),
@@ -426,7 +431,7 @@ class SettingsViewModel(
             state.copy(
                 configuredServices = state.configuredServices.map { e ->
                     if (e.instanceId == instanceId) {
-                        e.copy(apiKey = apiKey, connectionStatus = ConnectionStatus.Unknown)
+                        e.copy(apiKey = apiKey, connectionStatus = ConnectionStatus.Unknown, diagnostic = null)
                     } else {
                         e
                     }
@@ -444,7 +449,7 @@ class SettingsViewModel(
             state.copy(
                 configuredServices = state.configuredServices.map { e ->
                     if (e.instanceId == instanceId) {
-                        e.copy(baseUrl = baseUrl, connectionStatus = ConnectionStatus.Unknown)
+                        e.copy(baseUrl = baseUrl, connectionStatus = ConnectionStatus.Unknown, diagnostic = null)
                     } else {
                         e
                     }
@@ -466,6 +471,23 @@ class SettingsViewModel(
         }
     }
 
+    private fun onDiagnoseProvider(instanceId: String) {
+        if (_state.value.configuredServices.firstOrNull { it.instanceId == instanceId }?.isDiagnosing != false) return
+        _state.update { state ->
+            state.copy(configuredServices = state.configuredServices.map { entry ->
+                if (entry.instanceId == instanceId) entry.copy(isDiagnosing = true, diagnostic = null) else entry
+            }.toImmutableList())
+        }
+        viewModelScope.launch(backgroundDispatcher) {
+            val report = dataRepository.diagnoseProvider(instanceId)
+            _state.update { state ->
+                state.copy(configuredServices = state.configuredServices.map { entry ->
+                    if (entry.instanceId == instanceId) entry.copy(isDiagnosing = false, diagnostic = report) else entry
+                }.toImmutableList())
+            }
+        }
+    }
+
     private fun setRefreshingModels(instanceId: String, refreshing: Boolean) {
         _state.update { state ->
             state.copy(
@@ -476,10 +498,19 @@ class SettingsViewModel(
         }
     }
 
+    private fun clearDiagnostic(instanceId: String) {
+        _state.update { state ->
+            state.copy(configuredServices = state.configuredServices.map { entry ->
+                if (entry.instanceId == instanceId) entry.copy(diagnostic = null) else entry
+            }.toImmutableList())
+        }
+    }
+
     private fun onSelectModel(instanceId: String, modelId: String) {
         val entry = _state.value.configuredServices.find { it.instanceId == instanceId } ?: return
         dataRepository.updateInstanceSelectedModel(instanceId, entry.service, modelId)
         refreshInstanceModels(instanceId)
+        clearDiagnostic(instanceId)
     }
 
     private fun onToggleUseCustomModel(instanceId: String, useCustom: Boolean) {
@@ -498,6 +529,7 @@ class SettingsViewModel(
                 }.toImmutableList(),
             )
         }
+        clearDiagnostic(instanceId)
     }
 
     private fun onChangeCustomModelId(instanceId: String, modelId: String) {
@@ -509,6 +541,7 @@ class SettingsViewModel(
                 }.toImmutableList(),
             )
         }
+        clearDiagnostic(instanceId)
     }
 
     private fun onSaveSoul(text: String) {

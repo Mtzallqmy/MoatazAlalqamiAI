@@ -90,6 +90,7 @@ import com.inspiredandroid.kai.ui.chat.composables.PendingSmsBanners
 import com.inspiredandroid.kai.ui.chat.composables.QuestionInput
 import com.inspiredandroid.kai.ui.chat.composables.ServiceSelector
 import com.inspiredandroid.kai.ui.chat.composables.TopBar
+import com.inspiredandroid.kai.ui.chat.composables.TerminalPanel
 import com.inspiredandroid.kai.ui.chat.composables.TrailingIcon
 import com.inspiredandroid.kai.ui.chat.composables.UserMessage
 import com.inspiredandroid.kai.ui.chat.composables.WaitingResponseRow
@@ -542,6 +543,14 @@ private fun ChatModeScreen(
             historyState.value.any { it.role == History.Role.TOOL_EXECUTING && it.content == "execute_shell_command" }
         }
     }
+    val liveTerminalLines = remember(sandboxController, uiState.currentConversationId) {
+        val id = uiState.currentConversationId
+        if (sandboxController != null && id != null) sandboxController.transcriptFor(id) else null
+    }
+    var inlineTerminalMinimized by rememberSaveable(uiState.currentConversationId) { mutableStateOf(false) }
+    LaunchedEffect(isShellExecuting) {
+        if (isShellExecuting) inlineTerminalMinimized = false
+    }
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).navigationBarsPadding().statusBarsPadding().imePadding()) {
         Column(Modifier.fillMaxSize()) {
@@ -936,6 +945,14 @@ private fun ChatModeScreen(
             }
 
             if (!isSandboxOpen) {
+                if (liveTerminalLines != null && (isShellExecuting || liveTerminalLines.isNotEmpty())) {
+                    TerminalPanel(
+                        lines = liveTerminalLines,
+                        minimized = inlineTerminalMinimized,
+                        onToggleMinimize = { inlineTerminalMinimized = !inlineTerminalMinimized },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
+                }
                 QuestionInput(
                     files = uiState.files,
                     addFile = uiState.actions.addFile,

@@ -8,6 +8,7 @@ import com.inspiredandroid.kai.data.MemoryEntry
 import com.inspiredandroid.kai.data.ScheduledTask
 import com.inspiredandroid.kai.data.Service
 import com.inspiredandroid.kai.data.ServiceEntry
+import com.inspiredandroid.kai.data.ProviderDiagnosticReport
 import com.inspiredandroid.kai.data.SmsSyncState
 import com.inspiredandroid.kai.data.ThemeMode
 import com.inspiredandroid.kai.inference.DownloadError
@@ -39,6 +40,8 @@ data class ConfiguredServiceEntry(
     val customModelId: String = "",
     /** True while a model-list refresh is in flight for this instance. */
     val isRefreshingModels: Boolean = false,
+    val isDiagnosing: Boolean = false,
+    val diagnostic: ProviderDiagnosticReport? = null,
 )
 
 enum class ConnectionStatus {

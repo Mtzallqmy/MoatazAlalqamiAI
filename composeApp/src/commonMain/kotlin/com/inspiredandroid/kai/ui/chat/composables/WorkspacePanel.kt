@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.ui.unit.dp
 import com.inspiredandroid.kai.agents.OrchestratorActivityEvent
 import com.inspiredandroid.kai.agents.PendingApproval
+import com.inspiredandroid.kai.TerminalLine
 import kai.composeapp.generated.resources.Res
 import kai.composeapp.generated.resources.agents_activity_title
 import kai.composeapp.generated.resources.agents_approve

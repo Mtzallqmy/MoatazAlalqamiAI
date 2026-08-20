@@ -41,6 +41,7 @@ import com.inspiredandroid.kai.tools.SetAlarmTool
 import com.inspiredandroid.kai.tools.ShellCommandTool
 import com.inspiredandroid.kai.tools.SmsTools
 import com.inspiredandroid.kai.tools.SshConfigureHostTool
+import com.inspiredandroid.kai.tools.WorkspaceImportTool
 import com.inspiredandroid.kai.tools.buildAgentToolSet
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.SharedPreferencesSettings
@@ -177,6 +178,7 @@ actual fun getPlatformToolDefinitions(): List<ToolInfo> = CommonTools.commonTool
         ShellCommandTool.toolInfo,
         ProcessManagerTool.toolInfo,
         SshConfigureHostTool.toolInfo,
+        WorkspaceImportTool.toolInfo,
     )
 
 actual fun getAvailableTools(): List<Tool> {
@@ -220,6 +222,7 @@ actual fun getAvailableTools(): List<Tool> {
                 add(ShellCommandTool)
                 add(ProcessManagerTool)
                 add(SshConfigureHostTool)
+                add(WorkspaceImportTool)
             }
         }
 

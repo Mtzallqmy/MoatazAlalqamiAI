@@ -56,6 +56,7 @@ class ChatSystemPromptBuilderTest {
         variant: SystemPromptVariant,
         soul: String = "You are Moataz AI assistant.",
         hasTools: Boolean = true,
+        hasWorkspaceTool: Boolean = false,
         memoryEnabled: Boolean = true,
         schedulingEnabled: Boolean = true,
         memoryInstructions: String? = null,
@@ -72,6 +73,7 @@ class ChatSystemPromptBuilderTest {
         variant = variant,
         soul = soul,
         hasTools = hasTools,
+        hasWorkspaceTool = hasWorkspaceTool,
         memoryEnabled = memoryEnabled,
         schedulingEnabled = schedulingEnabled,
         memoryInstructions = memoryInstructions,
@@ -98,6 +100,17 @@ class ChatSystemPromptBuilderTest {
         body = body,
         bundledFilePaths = bundledFilePaths,
     )
+
+    @Test
+    fun `workspace contract is emitted only when shell tool is available`() {
+        val withoutShell = build(SystemPromptVariant.CHAT_REMOTE, hasTools = true, hasWorkspaceTool = false)
+        val withShell = build(SystemPromptVariant.CHAT_REMOTE, hasTools = true, hasWorkspaceTool = true)
+
+        assertTrue("## Moataz Workspace" !in withoutShell)
+        assertTrue("## Moataz Workspace" in withShell)
+        assertTrue("`/workspace`" in withShell)
+        assertTrue("stdout, stderr, and exit codes" in withShell)
+    }
 
     @Test
     fun `active skill section is absent by default and present when activated`() {

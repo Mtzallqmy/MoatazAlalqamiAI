@@ -35,6 +35,10 @@
     <string name="settings_status_connected">Connected</string>
     <string name="settings_status_error">Connection failed</string>
     <string name="settings_status_error_invalid_key">Invalid API key</string>
+    <string name="settings_api_diagnostics">API diagnostics</string>
+    <string name="settings_api_diagnostics_run">Run full diagnostics</string>
+    <string name="settings_api_diagnostics_agents_ready">Ready for chat and sandbox tools</string>
+    <string name="settings_api_diagnostics_chat_only">Chat may work, but sandbox tool calling is not verified</string>
     <string name="settings_status_error_quota_exhausted">Quota exhausted</string>
     <string name="settings_status_error_rate_limited">Rate limited</string>
     <string name="settings_status_error_connection_failed">Connection failed</string>

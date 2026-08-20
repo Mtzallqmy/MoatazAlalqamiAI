@@ -18,11 +18,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.inspiredandroid.kai.TerminalLine
 import kai.composeapp.generated.resources.Res
 import kai.composeapp.generated.resources.chat_sandbox_terminal
 import kai.composeapp.generated.resources.chat_sandbox_terminal_minimize
@@ -45,6 +47,10 @@ fun TerminalPanel(
     modifier: Modifier = Modifier,
 ) {
     val accent = MaterialTheme.colorScheme.surfaceVariant
+    val scrollState = rememberScrollState()
+    LaunchedEffect(lines.size) {
+        scrollState.scrollTo(scrollState.maxValue)
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -74,7 +80,7 @@ fun TerminalPanel(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(180.dp)
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(scrollState)
                     .background(MaterialTheme.colorScheme.surface)
                     .padding(8.dp),
             ) {
@@ -83,7 +89,7 @@ fun TerminalPanel(
                         Text(
                             text = line.text,
                             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                            color = if (line.isError) MaterialTheme.colorScheme.error else
+                            color = if (line is TerminalLine.Error) MaterialTheme.colorScheme.error else
                                 MaterialTheme.colorScheme.onSurface,
                         )
                     }
@@ -99,10 +105,3 @@ fun TerminalPanel(
         }
     }
 }
-
-/** One visible line of sandbox terminal output. */
-data class TerminalLine(
-    val text: String,
-    val isError: Boolean = false,
-    val timestampMs: Long = System.currentTimeMillis(),
-)
