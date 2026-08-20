@@ -51,6 +51,7 @@ class ProotExecutor(private val launcher: ProotLauncher) {
         timeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS,
         workingDir: String = "/workspace",
         extraEnv: Map<String, String> = emptyMap(),
+        maxOutputChars: Int = MAX_OUTPUT_LENGTH,
     ): Map<String, Any> {
         require(workingDir.isWithinSandbox()) {
             "Refusing working directory outside the sandbox: $workingDir"
@@ -60,7 +61,7 @@ class ProotExecutor(private val launcher: ProotLauncher) {
             timeoutSeconds = timeoutSeconds.coerceIn(1, MAX_TIMEOUT_SECONDS),
             workingDir = workingDir,
             extraEnv = extraEnv,
-            maxOutputChars = MAX_OUTPUT_LENGTH,
+            maxOutputChars = maxOutputChars.coerceIn(1, 2_000_000),
         )
         if (!result.success && result.stdout.isEmpty() && result.stderr.isEmpty() && !result.timedOut) {
             result.error?.let { return mapOf("success" to false, "error" to it) }

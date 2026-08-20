@@ -6,6 +6,10 @@ import com.inspiredandroid.kai.network.tools.ToolInfo
 import com.inspiredandroid.kai.network.tools.ToolSchema
 import com.inspiredandroid.kai.sandbox.LinuxSandboxManager
 import com.inspiredandroid.kai.sandbox.SandboxState
+import com.inspiredandroid.kai.workspace.ProotWorkspaceCommandRunner
+import com.inspiredandroid.kai.workspace.WorkspaceImportRequest
+import com.inspiredandroid.kai.workspace.WorkspaceImportService
+import com.inspiredandroid.kai.workspace.WorkspaceImportSource
 import org.koin.java.KoinJavaComponent.inject
 
 /** Imports a real project into the shared /workspace contract. */
@@ -31,60 +35,33 @@ Use source_type=github for a public HTTPS GitHub repository. Use source_type=arc
         val type = args["source_type"]?.toString()?.lowercase() ?: return failure("source_type is required")
         val source = args["source"]?.toString()?.trim() ?: return failure("source is required")
         val name = args["project_name"]?.toString()?.trim() ?: return failure("project_name is required")
-        if (!WorkspaceImportPolicy.validProjectName(name)) return failure("Invalid project_name")
-        val target = "/workspace/$name"
-        val executor = sandboxManager.createProotExecutor()
-        val exists = executor.execute("test -e ${quote(target)}", timeoutSeconds = 10)
-        if (exists["success"] == true) return failure("Project already exists: $target")
-
-        val result = when (type) {
+        val sourceRequest = when (type) {
             "github" -> {
                 if (!WorkspaceImportPolicy.validGithubUrl(source)) return failure("Only public HTTPS github.com repository URLs are accepted")
                 val branch = args["branch"]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
                 if (branch != null && !WorkspaceImportPolicy.validBranch(branch)) return failure("Invalid branch")
-                val branchArg = branch?.let { "--branch ${quote(it)} " }.orEmpty()
-                executor.execute(
-                    "git clone --depth 1 $branchArg-- ${quote(source)} ${quote(target)}",
-                    timeoutSeconds = 180,
-                    workingDir = "/workspace",
-                )
+                WorkspaceImportSource.GitHub(source, branch)
             }
-            "archive" -> importArchive(executor, source, target, name)
+            "archive" -> WorkspaceImportSource.UploadedArchive(source)
             else -> return failure("Unsupported source_type: $type")
         }
-        val success = result["success"] == true
-        return if (success) {
+        val result = runCatching {
+            WorkspaceImportService(ProotWorkspaceCommandRunner(sandboxManager.createProotExecutor()))
+                .import(WorkspaceImportRequest(name, sourceRequest))
+        }.getOrElse { return failure(it.message ?: "Project import failed") }
+        return if (result.commandResult.success) {
             mapOf(
                 "success" to true,
-                "project_path" to target,
-                "stdout" to result["stdout"]?.toString().orEmpty(),
+                "project_path" to result.projectPath,
+                "stdout" to result.commandResult.stdout,
                 "message" to "Project imported. Inspect its files and run its tests before reporting completion.",
             )
         } else {
-            failure(result["stderr"]?.toString()?.takeIf { it.isNotBlank() }
-                ?: result["error"]?.toString() ?: "Project import failed")
+            failure(result.commandResult.stderr.ifBlank { "Project import failed (exit ${result.commandResult.exitCode})" })
         }
-    }
-
-    private fun importArchive(
-        executor: com.inspiredandroid.kai.sandbox.ProotExecutor,
-        source: String,
-        target: String,
-        name: String,
-    ): Map<String, Any> {
-        if (!WorkspaceImportPolicy.validUploadedArchive(source)) {
-            return failure("Archive must be a file created by analyze_file under /root/uploads")
-        }
-        val staged = "/workspace/.moataz-import-$name"
-        val script = SAFE_ARCHIVE_SCRIPT.trimIndent()
-        val command = "rm -rf ${quote(staged)} && mkdir -p ${quote(staged)} && " +
-            "python3 -c ${quote(script)} ${quote(source)} ${quote(staged)} && " +
-            "mv -- ${quote(staged)} ${quote(target)}"
-        return executor.execute(command, timeoutSeconds = 180, workingDir = "/workspace")
     }
 
     private fun failure(message: String): Map<String, Any> = mapOf("success" to false, "error" to message)
-    private fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 
     val toolInfo = ToolInfo(
         id = "workspace_import_project",
@@ -93,25 +70,4 @@ Use source_type=github for a public HTTPS GitHub repository. Use source_type=arc
         isEnabled = false,
         userToggleable = false,
     )
-
-    private const val SAFE_ARCHIVE_SCRIPT = """
-import pathlib, sys, tarfile, zipfile
-src, dst = sys.argv[1], pathlib.Path(sys.argv[2])
-MAX_FILES, MAX_BYTES = 20000, 2 * 1024 * 1024 * 1024
-def safe_name(name):
-    p = pathlib.PurePosixPath(name.replace('\\', '/'))
-    return not p.is_absolute() and '..' not in p.parts
-if zipfile.is_zipfile(src):
-    with zipfile.ZipFile(src) as z:
-        members = z.infolist()
-        if len(members) > MAX_FILES or sum(m.file_size for m in members) > MAX_BYTES: raise SystemExit('archive limits exceeded')
-        if any(not safe_name(m.filename) or ((m.external_attr >> 16) & 0o170000) == 0o120000 for m in members): raise SystemExit('unsafe archive member')
-        z.extractall(dst)
-else:
-    with tarfile.open(src, 'r:*') as t:
-        members = t.getmembers()
-        if len(members) > MAX_FILES or sum(m.size for m in members) > MAX_BYTES: raise SystemExit('archive limits exceeded')
-        if any(not safe_name(m.name) or m.issym() or m.islnk() or m.isdev() for m in members): raise SystemExit('unsafe archive member')
-        t.extractall(dst, filter='data')
-"""
 }
