@@ -69,3 +69,16 @@
 ## 6. Testing
 
 `composeApp/src/commonTest` — 450+ اختبارًا يغطي Gateway وRouter وApproval وUsage وMarkdown وغيرها، تُشغَّل عبر `:composeApp:testAndroid` (Android Host Test).
+
+## 7. Local development runtime
+
+The production local path is a single Debian 13 Trixie arm64 installation.
+`LinuxInstaller` owns verified/atomic installation, `EnvironmentDoctor` owns
+readiness, and `EnvironmentRepairExecutor` owns targeted repair. All local
+development consumers bind the same projects directory at `/workspace` (plus
+the legacy `/root/projects` alias). See `RUNTIME_ARCHITECTURE.md`.
+
+The existing VT/PTY implementation remains the execution core. Stable contracts
+under `terminal/` and the generic `CliRegistry` prevent developer-tool providers
+from entering terminal parsing/rendering. See `TERMINAL_ARCHITECTURE.md` and
+`CLI_EXTENSION_GUIDE.md`.

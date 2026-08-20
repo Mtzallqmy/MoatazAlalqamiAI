@@ -23,7 +23,7 @@
 
 ## No Android binary
 - Binaries: Linux x86_64/aarch64, macOS x86_64/aarch64 only. **No Android**.
-- Linux nightly: https://github.com/lightpanda-io/browser/releases/tag/nightly — `lightpanda-aarch64-linux` (glibc; works in Ubuntu 26.04 PRoot sandbox!).
+- Linux nightly: https://github.com/lightpanda-io/browser/releases/tag/nightly — `lightpanda-aarch64-linux` (glibc; compatibility must be revalidated under Debian 13 Trixie PRoot).
 
 ## AGPL implications for MoatazAlalqamiAI
 - Binary distribution as-is (unmodified binary, separate process) is **not conveying** — AGPL does not trigger.

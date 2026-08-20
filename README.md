@@ -2,7 +2,7 @@
 
 **Android AI Agent** — تطبيق أندرويد ذكي للوكلاء الاصطناعيين، مبني على Kotlin Multiplatform.
 
-تطبيق محادثة وتفاعل مع أكثر من 30 مزود ذكاء اصطناعي (OpenAI، Anthropic، Google Gemini، OpenRouter، Groq، Ollama، والنماذج المحلية عبر LiteRT)، مع **AI Gateway** لتوجيه المهام تلقائيًا، ونظام **Agent Runtime** يشغّل الوكلاء تحت إشراف المستخدم، وتكاملات GitHub وTelegram.
+تطبيق محادثة وتفاعل مع أكثر من 30 مزود ذكاء اصطناعي (OpenAI، Anthropic، Google Gemini، OpenRouter، Groq، Ollama، والنماذج المحلية عبر LiteRT)، مع **Moataz Gateway** لتوجيه المهام تلقائيًا، ونظام **Moataz Agents** يشغّل الوكلاء تحت إشراف المستخدم، وتكاملات GitHub وTelegram.
 
 > مبني على أساس مشروع Kai 9000 مفتوح المصدر (Apache-2.0) مع تعديلات واسعة: هوية جديدة، تشفير آمن لمفاتيح API، بوابة ذكاء اصطناعي، نظام وكلاء، وموثّقات أمان وخصوصية كاملة.
 
@@ -35,6 +35,13 @@
 
 ### النماذج المحلية
 LiteRT لتشغيل نماذج GGUF/ONNX على الجهاز بدون إنترنت — مثالي مع Profile **PrivacyLocalOnly**.
+
+### Moataz Runtime وMoataz Code
+
+- Debian 13 Trixie arm64 تحت PRoot، بصورة rootfs مضمّنة وmanifest/SHA-256.
+- `/workspace` هو جذر المشاريع الموحد، مع mount توافق إلى `/root/projects`.
+- Ready لا تُعرض إلا بعد فحص PRoot وshell وCLI والملفات وPTY.
+- Moataz Terminal تحتفظ بمحرك PTY/VT الحقيقي، وCLI Registry يفصل Claude Code وOpenCode وGrok عن terminal core.
 
 ---
 
@@ -86,6 +93,10 @@ APK الناتج: `androidApp/build/outputs/apk/foss/debug/androidApp-foss-debug
 |---|---|
 | `README.md` | هذا الملف |
 | `docs/ARCHITECTURE.md` | بنية النظام: Gateway، Router، Agent، Security |
+| `docs/BRAND_IDENTITY.md` | هوية المنتج وحدود التوافق |
+| `docs/RUNTIME_ARCHITECTURE.md` | عقد Debian 13 والفحوص والإصلاح |
+| `docs/TERMINAL_ARCHITECTURE.md` | PTY/VT وحدود terminal core |
+| `docs/CLI_EXTENSION_GUIDE.md` | إضافة CLI جديدة بأقل تغييرات |
 | `docs/SECURITY.md` | نموذج التهديدات وقرارات الأمان |
 | `docs/PRIVACY.md` | سياسة الخصوصية وبيانات المستخدم |
 | `LEGAL_COMPLIANCE.md` | الترخيص وأصل المشروع |

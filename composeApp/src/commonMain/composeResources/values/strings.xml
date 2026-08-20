@@ -356,7 +356,7 @@
     <string name="notification_channel_description">Notifications sent by AI assistant</string>
     <string name="settings_sandbox_description">Install a Linux environment so the AI can run shell commands, scripts, and tools on your behalf. Runs securely inside the app.</string>
     <string name="settings_sandbox_distro_title">Distribution</string>
-    <string name="settings_sandbox_distro_debian">Debian 12</string>
+    <string name="settings_sandbox_distro_debian">Debian 13</string>
     <string name="settings_sandbox_distro_debian_detail">Recommended · ~150 MB · shared with the app's own build environment</string>
     <string name="settings_sandbox_distro_debian_installed">Installed · shared with the app's own build environment</string>
     <string name="settings_sandbox_distro_alpine">Alpine Linux</string>
@@ -450,7 +450,7 @@
     <string name="kai_build_exit_content_description">Exit build environment</string>
     <string name="kai_build_back_content_description">Back to projects</string>
     <string name="kai_build_setup_title">Set up Linux (Beta)</string>
-    <string name="kai_build_setup_description">The Linux build environment is in beta. Debian Bookworm runs under proot inside this app, with curl, git, wget, python3, and other essentials included. The first install downloads about 100 MB and needs network access.</string>
+    <string name="kai_build_setup_description">The Linux build environment is in beta. Debian Trixie runs under proot inside this app, with curl, git, wget, python3, and other essentials included. The first install downloads about 100 MB and needs network access.</string>
     <string name="kai_build_setup_agents_title">Coding agents</string>
     <string name="kai_build_setup_agents_description">Pick the CLIs to install on the fresh system. You can add the others later.</string>
     <string name="kai_build_setup_install">Install Debian</string>

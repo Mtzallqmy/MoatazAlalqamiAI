@@ -19,6 +19,7 @@ interface KaiBuildController {
     fun install(agentIds: Set<String>)
     fun cancel()
     fun uninstall()
+    fun repair()
 
     /** Re-scans projects, installed agents, and system facts. */
     fun refresh()
@@ -85,6 +86,7 @@ class NoOpKaiBuildController : KaiBuildController {
     override fun install(agentIds: Set<String>) {}
     override fun cancel() {}
     override fun uninstall() {}
+    override fun repair() {}
     override fun refresh() {}
     override fun createProject(name: String): String? = null
     override fun deleteProject(name: String) {}

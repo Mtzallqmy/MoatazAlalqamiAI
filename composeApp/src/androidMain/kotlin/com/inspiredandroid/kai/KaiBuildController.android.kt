@@ -52,6 +52,7 @@ class AndroidKaiBuildController : KaiBuildController {
     override fun install(agentIds: Set<String>) = manager.install(agentIds)
     override fun cancel() = manager.cancel()
     override fun uninstall() = manager.uninstall()
+    override fun repair() = manager.repair()
     override fun refresh() = manager.refresh()
     override fun createProject(name: String): String? = manager.createProject(name)
     override fun deleteProject(name: String) = manager.deleteProject(name)

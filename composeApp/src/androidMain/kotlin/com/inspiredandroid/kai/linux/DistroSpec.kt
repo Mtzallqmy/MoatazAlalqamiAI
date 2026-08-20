@@ -22,7 +22,7 @@ private val ALPINE_MIRRORS = listOf(
 
 private const val LXC_INDEX = "https://images.linuxcontainers.org/meta/1.0/index-user"
 private const val LXC_BASE = "https://images.linuxcontainers.org"
-private const val DEBIAN_RELEASE = "bookworm"
+private const val DEBIAN_RELEASE = "trixie"
 
 /**
  * The per-distribution facts the shared installer and proot launcher need:
@@ -141,11 +141,11 @@ object DebianSpec : DistroSpec {
     override fun rootfsUrls(): List<String> {
         val arch = arch()
         val githubAssetUrl = when {
-            arch == "arm64" -> "https://github.com/Mtzallqmy/MoatazAlalqamiAI/releases/download/v4.1.0/moataz-debian-rootfs-arm64.tar.xz"
-            arch == "amd64" -> "https://github.com/Mtzallqmy/MoatazAlalqamiAI/releases/download/v4.1.0/moataz-debian-rootfs-x86_64.tar.xz"
+            arch == "arm64" -> null // No Debian 13 release asset is published yet; use LXC Trixie.
+            arch == "amd64" -> null
             else -> null
         }
-        val fallbackPath = "/images/debian/$DEBIAN_RELEASE/$arch/default/20260818_05:24/rootfs.tar.xz"
+        val fallbackPath = "/images/debian/$DEBIAN_RELEASE/$arch/default/latest/rootfs.tar.xz"
         val lxcCandidates = try {
             val index = URL(LXC_INDEX).openStream().bufferedReader().use { it.readText() }
             val line = index.lineSequence()

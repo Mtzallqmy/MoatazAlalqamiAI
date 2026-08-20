@@ -19,6 +19,9 @@ enum class BuildStep {
 @Immutable
 sealed interface BuildEnvironmentState {
     data object NotInstalled : BuildEnvironmentState
+    data object Checking : BuildEnvironmentState
+    data object HealthChecking : BuildEnvironmentState
+    data object Repairing : BuildEnvironmentState
 
     /** [progress] is null while a step has no measurable progress. */
     data class Installing(
@@ -28,6 +31,14 @@ sealed interface BuildEnvironmentState {
     ) : BuildEnvironmentState
 
     data object Ready : BuildEnvironmentState
+
+    data class Error(
+        val code: String,
+        val title: String,
+        val technicalDetail: String,
+        val recoverable: Boolean,
+        val recommendedAction: String,
+    ) : BuildEnvironmentState
 }
 
 /**

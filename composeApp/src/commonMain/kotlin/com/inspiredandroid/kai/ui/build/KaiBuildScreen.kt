@@ -45,7 +45,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 /** Where Debian mounts the project folders — the browser's root inside a project. */
-private const val PROJECTS_GUEST_DIR = "/root/projects"
+private const val PROJECTS_GUEST_DIR = "/workspace"
 
 /**
  * Keeps Kai Build's browser out of the chat sandbox's ViewModel slot: same class,
@@ -60,6 +60,7 @@ data class KaiBuildActions(
     val installAgent: (String) -> Unit,
     val cancel: () -> Unit,
     val uninstall: () -> Unit,
+    val repair: () -> Unit,
     val setLaunchAgent: (String?) -> Unit,
     val openProject: (String) -> Unit,
     val createProject: (String) -> Unit,
@@ -97,6 +98,7 @@ fun KaiBuildScreen(
             installAgent = viewModel::installAgent,
             cancel = viewModel::cancel,
             uninstall = viewModel::uninstall,
+            repair = viewModel::repair,
             setLaunchAgent = viewModel::setLaunchAgent,
             openProject = viewModel::openProject,
             createProject = viewModel::createProject,
@@ -243,6 +245,7 @@ internal fun KaiBuildScreenContent(
                         onToggleAgent = actions.toggleAgent,
                         onInstall = actions.install,
                         onCancel = actions.cancel,
+                        onRepair = actions.repair,
                     )
                 }
             }

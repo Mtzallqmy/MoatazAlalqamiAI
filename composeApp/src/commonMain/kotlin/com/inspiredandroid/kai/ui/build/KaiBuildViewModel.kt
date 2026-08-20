@@ -93,6 +93,7 @@ class KaiBuildViewModel(
 
     fun cancel() = controller.cancel()
     fun uninstall() = controller.uninstall()
+    fun repair() = controller.repair()
 
     /**
      * Picks what the next opened project starts with; null is a plain shell.

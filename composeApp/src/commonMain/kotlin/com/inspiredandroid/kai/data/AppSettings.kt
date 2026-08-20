@@ -2,6 +2,7 @@ package com.inspiredandroid.kai.data
 
 import com.inspiredandroid.kai.defaultUiScale
 import com.inspiredandroid.kai.linux.LinuxDistro
+import com.inspiredandroid.kai.terminal.config.TerminalProfileStore
 import com.russhwolf.settings.Settings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -365,6 +366,17 @@ class AppSettings(internal val settings: Settings) {
         settings.putString(KEY_KAI_BUILD_LAUNCH_AGENT, agentId.orEmpty())
     }
 
+    fun getTerminalProfileStore(): TerminalProfileStore {
+        val raw = settings.getString(KEY_TERMINAL_PROFILES_V1, "")
+        if (raw.isBlank()) return TerminalProfileStore()
+        return runCatching { SharedJson.decodeFromString<TerminalProfileStore>(raw) }
+            .getOrDefault(TerminalProfileStore())
+    }
+
+    fun setTerminalProfileStore(store: TerminalProfileStore) {
+        settings.putString(KEY_TERMINAL_PROFILES_V1, SharedJson.encodeToString(store))
+    }
+
     fun getScheduledTasksJson(): String = settings.getString(KEY_SCHEDULED_TASKS, "[]")
 
     fun setScheduledTasksJson(json: String) {
@@ -628,6 +640,7 @@ class AppSettings(internal val settings: Settings) {
         const val KEY_SANDBOX_ENABLED = "sandbox_enabled"
         const val KEY_SANDBOX_DISTRO = "sandbox_distro"
         const val KEY_KAI_BUILD_LAUNCH_AGENT = "kai_build_launch_agent"
+        const val KEY_TERMINAL_PROFILES_V1 = "moataz_terminal_profiles_v1"
 
         // Basic memory guidance shared by every chat variant. The advanced `## Structured
         // Learning` block lives in `ChatSystemPromptBuilder.DEFAULT_STRUCTURED_LEARNING_SECTION`

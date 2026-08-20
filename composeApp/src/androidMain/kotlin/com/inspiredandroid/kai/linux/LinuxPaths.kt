@@ -112,6 +112,7 @@ class LinuxPaths(
 
     /** Mount points must exist inside the rootfs before proot binds over them. */
     fun ensureMountPoints() {
+        File(rootfsDir, "workspace").mkdirs()
         File(rootfsDir, "root/projects").mkdirs()
         File(rootfsDir, "root/.local/bin").mkdirs()
     }
