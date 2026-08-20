@@ -23,17 +23,16 @@ class LinuxDistroTest {
     }
 
     @Test
-    fun `ubuntu is the default from v340 and legacy installs are alpine`() {
-        // Ubuntu 26.04 LTS became the default for the Agentic Development
-        // Platform (v3.4.0+). A rootfs with no marker predates the distro
-        // choice, and Alpine was the only thing the chat sandbox could be.
-        assertEquals(LinuxDistro.UBUNTU, LinuxDistro.DEFAULT)
+    fun `debian is the production default and legacy installs are alpine`() {
+        assertEquals(LinuxDistro.DEBIAN, LinuxDistro.DEFAULT)
         assertEquals(LinuxDistro.ALPINE, LinuxDistro.LEGACY)
+        assertTrue(LinuxDistro.DEBIAN.displayName.contains("13"))
     }
 
     @Test
     fun `each distro uses its own package manager`() {
         assertSame(AptPackageManager, LinuxDistro.DEBIAN.packageManager)
+        assertSame(AptPackageManager, LinuxDistro.UBUNTU.packageManager)
         assertSame(ApkPackageManager, LinuxDistro.ALPINE.packageManager)
     }
 
@@ -57,9 +56,6 @@ class LinuxDistroTest {
     fun `optional bundle carries the remote-server tooling the shell tool advertises`() {
         LinuxDistro.entries.forEach { distro ->
             listOf("openssh-client", "lftp", "rsync").forEach { pkg ->
-                // Remote tooling is either optional-installable or already in the
-                // base set (Ubuntu 26.04 ships it pre-installed as part of the
-                // agentic environment rootfs).
                 val present = pkg in distro.optionalPackages || pkg in distro.basePackages
                 assertTrue(present, "${distro.id} is missing $pkg in optional and base")
             }
@@ -76,10 +72,11 @@ class LinuxDistroTest {
     }
 
     @Test
-    fun `debian base carries what the coding-agent installers need`() {
-        // tar: OpenCode's installer extracts a .tar.gz. coreutils: Claude's checks
-        // a sha256sum. ca-certificates/curl: every vendor script is a curl | bash.
-        listOf("tar", "coreutils", "ca-certificates", "curl", "python3").forEach {
+    fun `debian base carries agent terminal and cancellation dependencies`() {
+        listOf(
+            "tar", "coreutils", "ca-certificates", "curl", "python3",
+            "procps", "psmisc", "jq", "ripgrep", "openssh-client", "rsync",
+        ).forEach {
             assertTrue(it in LinuxDistro.DEBIAN.basePackages, "Debian base is missing $it")
         }
     }
