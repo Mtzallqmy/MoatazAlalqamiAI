@@ -160,9 +160,9 @@ class LinuxInstaller(
             append("missing=''; ")
             append("for c in ")
             append(required.joinToString(" "))
-            append("; do command -v \"$c\" >/dev/null 2>&1 || missing=\"$missing $c\"; done; ")
-            append("[ -z \"$missing\" ] || { echo \"missing:$missing\" >&2; exit 127; }; ")
-            append("test \"$(dpkg --print-architecture 2>/dev/null)\" = arm64; ")
+            append("; do command -v \"${'$'}c\" >/dev/null 2>&1 || missing=\"${'$'}missing ${'$'}c\"; done; ")
+            append("[ -z \"${'$'}missing\" ] || { echo \"missing:${'$'}missing\" >&2; exit 127; }; ")
+            append("test \"${'$'}(dpkg --print-architecture 2>/dev/null)\" = arm64; ")
             append("printf KAI_CLI_OK")
         }
         val result = launcher.execute(command, timeoutSeconds = RUNTIME_PROBE_TIMEOUT_SECONDS)
