@@ -4,8 +4,9 @@ package com.inspiredandroid.kai.linux
  * The Linux distributions Kai can run under proot.
  *
  * Kai Build is always [DEBIAN] — its coding agents are vendor scripts that expect
- * glibc and apt. The chat sandbox lets the user pick, and when it is also Debian
- * the two share a single rootfs instead of installing one each.
+ * glibc and apt. The chat sandbox defaults to the same Debian install so both
+ * surfaces share one lightweight rootfs instead of maintaining duplicate Linux
+ * environments on a phone.
  */
 enum class LinuxDistro(
     val id: String,
@@ -21,35 +22,42 @@ enum class LinuxDistro(
     val packageManager: PackageManagerSpec,
 ) {
     /**
-     * Base set is Kai Build's proven list: `tar` because OpenCode's installer
-     * extracts a `.tar.gz`, `coreutils` because Claude's checks a `sha256sum`.
+     * Debian 13 is the production on-device environment. The base intentionally
+     * stays CLI-focused: enough for agents, git/network/file tooling, process
+     * control and the PTY bridge, without pulling a desktop or build toolchain.
+     * Larger language/toolchain packages remain optional.
      */
     DEBIAN(
         id = "debian",
-        displayName = "Debian 12",
+        displayName = "Debian 13 (Trixie)",
         basePackages = listOf(
-            "bash", "ca-certificates", "curl", "wget", "git",
-            "nano", "less", "unzip", "python3", "tar", "coreutils",
+            "bash", "bash-completion", "ca-certificates", "curl", "wget", "git",
+            "nano", "less", "jq", "ripgrep", "zip", "unzip", "tar", "xz-utils",
+            "python3", "coreutils", "findutils", "sed", "grep", "procps", "psmisc",
+            "openssh-client", "rsync", "file",
         ),
         optionalPackages = listOf(
-            "jq",
             "nodejs",
             "npm",
             "python3-pip",
-            "openssh-client",
             "lftp",
-            "rsync",
+            "tmux",
+            "tree",
+            "fzf",
+            "build-essential",
+            "cmake",
+            "pkg-config",
+            "default-jdk",
+            "golang-go",
+            "rustc",
+            "cargo",
         ),
         packageManager = AptPackageManager,
     ),
 
     /**
-     * Ubuntu 26.04 LTS — the default distro for the Agentic Development
-     * Platform (v3.4.0+). Uses apt (same family as Debian) but ships with a
-     * larger base: `build-essential` and `python3-venv` are included because
-     * coding agents expect them, `jq`/`ripgrep` because the agent's tools
-     * rely on structured output, and `nodejs`/`npm` so JavaScript projects
-     * scaffold without a second package install.
+     * Ubuntu remains available for compatibility, but fresh local sandboxes use
+     * Debian so Kai Build and the terminal can share a single rootfs.
      */
     UBUNTU(
         id = "ubuntu",
@@ -69,12 +77,8 @@ enum class LinuxDistro(
             "cargo",
             "default-jre",
             "default-jdk",
-            "docker.io",
-            "podman",
             "sqlite3",
             "postgresql",
-            "nginx",
-            "openssh-server",
             "lftp",
         ),
         packageManager = AptPackageManager,
@@ -104,11 +108,10 @@ enum class LinuxDistro(
 
     companion object {
         /**
-         * What a fresh install becomes unless the user picks otherwise.
-         * Ubuntu 26.04 LTS is the default for the Agentic Development Platform
-         * (v3.4.0+); Kai Build still uses [DEBIAN] for compatibility.
+         * Debian 13 is the production default. It is also Kai Build's distro, so
+         * a fresh phone keeps one rootfs, one package database and one CLI home.
          */
-        val DEFAULT = UBUNTU
+        val DEFAULT = DEBIAN
 
         /**
          * Installs made before the distro was recorded are Alpine — that was the
