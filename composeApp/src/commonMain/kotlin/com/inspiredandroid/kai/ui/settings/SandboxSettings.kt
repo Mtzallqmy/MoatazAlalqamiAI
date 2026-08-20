@@ -23,16 +23,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import com.inspiredandroid.kai.formatFileSize
 import com.inspiredandroid.kai.linux.LinuxDistro
+import com.inspiredandroid.kai.runtime.RuntimeDiagnosticsStore
 import com.inspiredandroid.kai.ui.handCursor
 import com.inspiredandroid.kai.ui.sandbox.SandboxProgressRow
 import kai.composeapp.generated.resources.Res
 import kai.composeapp.generated.resources.settings_sandbox_cancel
 import kai.composeapp.generated.resources.settings_sandbox_description
 import kai.composeapp.generated.resources.settings_sandbox_disk_usage
+import kai.composeapp.generated.resources.settings_sandbox_copy_diagnostics
 import kai.composeapp.generated.resources.settings_sandbox_distro_alpine
 import kai.composeapp.generated.resources.settings_sandbox_distro_alpine_installed
 import kai.composeapp.generated.resources.settings_sandbox_distro_debian
@@ -61,6 +65,7 @@ internal fun SandboxSettingsCard(
     onMigrateHome: () -> Unit,
 ) {
     var showResetDialog by remember { mutableStateOf(false) }
+    val clipboard = LocalClipboardManager.current
     SettingsCard {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -171,6 +176,21 @@ internal fun SandboxSettingsCard(
                         Text(stringResource(Res.string.settings_sandbox_uninstall))
                     }
                 }
+            }
+        }
+
+        if (!sandboxState.isWorking && (sandboxState.sandboxInstalled || sandboxState.hasError)) {
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = {
+                    val diagnostics = RuntimeDiagnosticsStore.exportText().ifBlank {
+                        "Moataz Runtime: no diagnostic events recorded"
+                    }
+                    clipboard.setText(AnnotatedString(diagnostics))
+                },
+                modifier = Modifier.handCursor(),
+            ) {
+                Text(stringResource(Res.string.settings_sandbox_copy_diagnostics))
             }
         }
     }

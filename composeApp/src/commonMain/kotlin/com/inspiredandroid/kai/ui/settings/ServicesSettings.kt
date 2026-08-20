@@ -99,6 +99,11 @@ import kai.composeapp.generated.resources.settings_fetch_models
 import kai.composeapp.generated.resources.settings_api_diagnostics
 import kai.composeapp.generated.resources.settings_api_diagnostics_agents_ready
 import kai.composeapp.generated.resources.settings_api_diagnostics_chat_only
+import kai.composeapp.generated.resources.settings_api_diagnostics_unusable
+import kai.composeapp.generated.resources.settings_api_diagnostics_label_chat
+import kai.composeapp.generated.resources.settings_api_diagnostics_label_connection
+import kai.composeapp.generated.resources.settings_api_diagnostics_label_models
+import kai.composeapp.generated.resources.settings_api_diagnostics_label_tools
 import kai.composeapp.generated.resources.settings_api_diagnostics_run
 import kai.composeapp.generated.resources.settings_models_discovered
 import kai.composeapp.generated.resources.litert_context_size
@@ -695,19 +700,24 @@ private fun ProviderDiagnosticsPanel(
         }
         if (report != null) {
             Spacer(Modifier.height(8.dp))
+            val summary = providerDiagnosticSummary(report)
             Text(
-                text = if (report.isUsableForAgents) {
-                    stringResource(Res.string.settings_api_diagnostics_agents_ready)
-                } else {
-                    stringResource(Res.string.settings_api_diagnostics_chat_only)
+                text = when (summary) {
+                    ProviderDiagnosticSummary.AgentReady -> stringResource(Res.string.settings_api_diagnostics_agents_ready)
+                    ProviderDiagnosticSummary.ChatReady -> stringResource(Res.string.settings_api_diagnostics_chat_only)
+                    ProviderDiagnosticSummary.Unusable -> stringResource(Res.string.settings_api_diagnostics_unusable)
                 },
                 style = MaterialTheme.typography.labelMedium,
-                color = if (report.isUsableForAgents) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                color = when (summary) {
+                    ProviderDiagnosticSummary.AgentReady -> MaterialTheme.colorScheme.primary
+                    ProviderDiagnosticSummary.ChatReady -> MaterialTheme.colorScheme.tertiary
+                    ProviderDiagnosticSummary.Unusable -> MaterialTheme.colorScheme.error
+                },
             )
-            DiagnosticRow("Connection", report.connection)
-            DiagnosticRow("Models", report.modelDiscovery)
-            DiagnosticRow("Chat", report.chatCompletion)
-            DiagnosticRow("Tool calling", report.toolCalling)
+            DiagnosticRow(stringResource(Res.string.settings_api_diagnostics_label_connection), report.connection)
+            DiagnosticRow(stringResource(Res.string.settings_api_diagnostics_label_models), report.modelDiscovery)
+            DiagnosticRow(stringResource(Res.string.settings_api_diagnostics_label_chat), report.chatCompletion)
+            DiagnosticRow(stringResource(Res.string.settings_api_diagnostics_label_tools), report.toolCalling)
             Text(
                 text = "${report.providerName} · ${report.modelId} · ${report.latencyMs} ms",
                 style = MaterialTheme.typography.labelSmall,
@@ -715,6 +725,14 @@ private fun ProviderDiagnosticsPanel(
             )
         }
     }
+}
+
+internal enum class ProviderDiagnosticSummary { Unusable, ChatReady, AgentReady }
+
+internal fun providerDiagnosticSummary(report: ProviderDiagnosticReport): ProviderDiagnosticSummary = when {
+    report.isUsableForAgents -> ProviderDiagnosticSummary.AgentReady
+    report.isUsableForChat -> ProviderDiagnosticSummary.ChatReady
+    else -> ProviderDiagnosticSummary.Unusable
 }
 
 @Composable

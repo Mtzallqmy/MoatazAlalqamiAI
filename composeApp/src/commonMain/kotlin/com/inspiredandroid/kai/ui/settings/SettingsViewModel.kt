@@ -6,7 +6,9 @@ import com.inspiredandroid.kai.DaemonController
 import com.inspiredandroid.kai.Platform
 import com.inspiredandroid.kai.currentPlatform
 import com.inspiredandroid.kai.data.DataRepository
+import com.inspiredandroid.kai.data.DiagnosticCheck
 import com.inspiredandroid.kai.data.ImportSection
+import com.inspiredandroid.kai.data.ProviderDiagnosticReport
 import com.inspiredandroid.kai.data.Service
 import com.inspiredandroid.kai.data.TaskScheduler
 import com.inspiredandroid.kai.data.ThemeMode
@@ -48,6 +50,7 @@ import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.collections.immutable.toPersistentSet
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -472,20 +475,53 @@ class SettingsViewModel(
     }
 
     private fun onDiagnoseProvider(instanceId: String) {
-        if (_state.value.configuredServices.firstOrNull { it.instanceId == instanceId }?.isDiagnosing != false) return
+        val target = _state.value.configuredServices.firstOrNull { it.instanceId == instanceId }
+            ?.takeUnless { it.isDiagnosing }
+            ?: return
         _state.update { state ->
             state.copy(configuredServices = state.configuredServices.map { entry ->
                 if (entry.instanceId == instanceId) entry.copy(isDiagnosing = true, diagnostic = null) else entry
             }.toImmutableList())
         }
         viewModelScope.launch(backgroundDispatcher) {
-            val report = dataRepository.diagnoseProvider(instanceId)
-            _state.update { state ->
-                state.copy(configuredServices = state.configuredServices.map { entry ->
-                    if (entry.instanceId == instanceId) entry.copy(isDiagnosing = false, diagnostic = report) else entry
-                }.toImmutableList())
+            var report: ProviderDiagnosticReport? = null
+            try {
+                report = dataRepository.diagnoseProvider(instanceId)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                val detail = safeProviderDiagnosticError(error)
+                report = ProviderDiagnosticReport(
+                    instanceId = instanceId,
+                    providerName = target.service.displayName,
+                    modelId = target.customModelId.takeIf { target.useCustomModel }.orEmpty()
+                        .ifBlank { target.selectedModel?.id.orEmpty() },
+                    endpoint = target.baseUrl,
+                    connection = DiagnosticCheck.failed(detail),
+                    modelDiscovery = DiagnosticCheck.skipped("Diagnostics did not complete"),
+                    chatCompletion = DiagnosticCheck.skipped("Diagnostics did not complete"),
+                    toolCalling = DiagnosticCheck.skipped("Diagnostics did not complete"),
+                    latencyMs = 0,
+                    checkedAtEpochMs = 0,
+                )
+            } finally {
+                _state.update { state ->
+                    state.copy(configuredServices = state.configuredServices.map { entry ->
+                        if (entry.instanceId == instanceId) {
+                            entry.copy(isDiagnosing = false, diagnostic = report ?: entry.diagnostic)
+                        } else {
+                            entry
+                        }
+                    }.toImmutableList())
+                }
             }
         }
+    }
+
+    /** Keep provider exceptions useful without echoing credentials into UI state. */
+    private fun safeProviderDiagnosticError(error: Exception): String {
+        val message = error.message?.takeIf { it.isNotBlank() } ?: "Provider diagnostics failed"
+        return com.inspiredandroid.kai.runtime.RuntimeDiagnosticRedactor.redact(message).take(500)
     }
 
     private fun setRefreshingModels(instanceId: String, refreshing: Boolean) {
