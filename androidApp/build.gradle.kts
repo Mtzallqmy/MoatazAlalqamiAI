@@ -1,3 +1,9 @@
+plugins {
+    alias(libs.plugins.androidApplication)
+    alias(libs.plugins.composeMultiplatform)
+    alias(libs.plugins.composeCompiler)
+}
+
 val releaseKeystoreFile = System.getenv("KEYSTORE_FILE")
 val releaseKeystorePassword = System.getenv("KEYSTORE_PASSWORD")
 val releaseKeyAlias = System.getenv("KEY_ALIAS")
@@ -8,12 +14,6 @@ val hasReleaseSigning = listOf(
     releaseKeyAlias,
     releaseKeyPassword,
 ).all { !it.isNullOrBlank() }
-
-plugins {
-    alias(libs.plugins.androidApplication)
-    alias(libs.plugins.composeMultiplatform)
-    alias(libs.plugins.composeCompiler)
-}
 
 android {
     namespace = "com.inspiredandroid.kai"
@@ -39,8 +39,7 @@ android {
                 .toInt()
         versionName = libs.versions.appVersion.get()
 
-        // Production is intentionally arm64-only: the bundled Debian rootfs and
-        // native PRoot runtime are validated together as one 64-bit environment.
+        // One production APK, one validated 64-bit runtime.
         ndk {
             abiFilters += "arm64-v8a"
         }
@@ -69,8 +68,6 @@ android {
     }
 
     androidResources {
-        // The rootfs is already xz-compressed. Store it without a second APK
-        // compression pass to reduce build work and extraction overhead.
         noCompress += "xz"
     }
 
@@ -85,15 +82,6 @@ android {
         }
     }
 
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            include("arm64-v8a")
-            isUniversalApk = false
-        }
-    }
-
     buildTypes {
         getByName("release") {
             isMinifyEnabled = true
@@ -102,7 +90,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "../composeApp/proguard-rules.pro",
             )
-            // Never silently sign a production build with the debug key.
+            // Never silently sign production with the Android debug key.
             if (hasReleaseSigning) {
                 signingConfig = signingConfigs.getByName("release")
             }
