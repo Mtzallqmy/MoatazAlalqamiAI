@@ -12,22 +12,23 @@ class SandboxConfigTest {
     @Test
     fun `standard config is well formed`() {
         val config = SandboxConfig(
-            distro = com.inspiredandroid.kai.linux.LinuxDistro.UBUNTU,
+            distro = com.inspiredandroid.kai.linux.LinuxDistro.DEBIAN,
             resourceProfile = ResourceProfile.STANDARD,
             networkPolicy = NetworkPolicy.DEVELOPER,
             workspaceRoot = "/workspace",
             maxLifetime = 1.hours,
         )
-        assertEquals(com.inspiredandroid.kai.linux.LinuxDistro.UBUNTU, config.distro)
+        assertEquals(com.inspiredandroid.kai.linux.LinuxDistro.DEBIAN, config.distro)
         assertEquals(2, config.resourceProfile.vCpu)
         assertEquals(4, config.resourceProfile.ramGiB)
         assertEquals(25, config.resourceProfile.diskGiB)
     }
 
     @Test
-    fun `default config picks UBUNTU and DEVELOPER policy`() {
+    fun `default config follows production distro and developer policy`() {
         val config = SandboxConfig()
-        assertEquals(com.inspiredandroid.kai.linux.LinuxDistro.UBUNTU, config.distro)
+        assertEquals(com.inspiredandroid.kai.linux.LinuxDistro.DEFAULT, config.distro)
+        assertEquals(com.inspiredandroid.kai.linux.LinuxDistro.DEBIAN, config.distro)
         assertEquals(NetworkPolicy.DEVELOPER, config.networkPolicy)
     }
 
