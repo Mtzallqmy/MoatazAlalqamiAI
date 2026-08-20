@@ -67,6 +67,36 @@ class RuntimeContractTest {
         assertIs<EnvironmentRepairAction.ReinstallRuntimePreservingProjects>(plan.actions.single())
     }
 
+    @Test fun `boot probe failure requires runtime reinstall`() {
+        val plan = EnvironmentRepairPlanner.plan(
+            EnvironmentHealth(listOf(EnvironmentIssue.BootProbeFailed("proot failed"))),
+        )
+        assertTrue(plan.requiresReinstall)
+        assertIs<EnvironmentRepairAction.ReinstallRuntimePreservingProjects>(plan.actions.single())
+    }
+
+    @Test fun `pty failure requires runtime reinstall`() {
+        val plan = EnvironmentRepairPlanner.plan(
+            EnvironmentHealth(listOf(EnvironmentIssue.PtyUnavailable("pty failed"))),
+        )
+        assertTrue(plan.requiresReinstall)
+        assertIs<EnvironmentRepairAction.ReinstallRuntimePreservingProjects>(plan.actions.single())
+    }
+
+    @Test fun `multiple fatal runtime issues produce one reinstall action`() {
+        val plan = EnvironmentRepairPlanner.plan(
+            EnvironmentHealth(
+                listOf(
+                    EnvironmentIssue.BootProbeFailed("proot failed"),
+                    EnvironmentIssue.PtyUnavailable("pty failed"),
+                    EnvironmentIssue.AgentBinaryBroken("agent failed"),
+                ),
+            ),
+        )
+        assertTrue(plan.requiresReinstall)
+        assertIs<EnvironmentRepairAction.ReinstallRuntimePreservingProjects>(plan.actions.single())
+    }
+
     @Test fun `marker is not written before health checks pass`() {
         var written = false
         val health = EnvironmentHealth(listOf(EnvironmentIssue.BrokenShell("missing sh")))

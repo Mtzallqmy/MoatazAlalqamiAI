@@ -18,6 +18,8 @@ import com.inspiredandroid.kai.linux.LinuxInstaller
 import com.inspiredandroid.kai.linux.LinuxInstalls
 import com.inspiredandroid.kai.linux.LinuxPaths
 import com.inspiredandroid.kai.linux.ProotLauncher
+import com.inspiredandroid.kai.runtime.RuntimeDiagnosticEvent
+import com.inspiredandroid.kai.runtime.RuntimeDiagnosticsSink
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -150,7 +152,13 @@ class LinuxSandboxManager(
             return
         }
         if (installed.distro != LinuxDistro.DEBIAN) {
-            _state.value = SandboxState.Ready
+            // Legacy Ubuntu/Alpine installs remain on disk for migration and
+            // compatibility, but they do not satisfy the production Debian 13
+            // health contract. Never label an unprobed compatibility image Ready.
+            _state.value = SandboxState.Error(
+                "${installed.distro.displayName} is a compatibility runtime and was not health-verified. " +
+                    "Select Debian 13 to use Moataz Runtime; existing projects are preserved.",
+            )
             return
         }
         _state.value = SandboxState.Installing("Checking Moataz Runtime...")
@@ -249,14 +257,24 @@ class LinuxSandboxManager(
         val target = selected
         val installer = installer()
         currentJob = scope.launch {
+            val started = System.nanoTime()
             try {
                 val installed = installer.install(target) { step -> _state.value = step.toSandboxState() }
                 marker = installed
                 _state.value = SandboxState.Ready
+                RuntimeDiagnosticsSink.Shared.record(
+                    RuntimeDiagnosticEvent("install_total", null, 0, (System.nanoTime() - started) / 1_000_000, null, null),
+                )
             } catch (e: kotlinx.coroutines.CancellationException) {
+                RuntimeDiagnosticsSink.Shared.record(
+                    RuntimeDiagnosticEvent("install_total", null, null, (System.nanoTime() - started) / 1_000_000, null, "cancelled"),
+                )
                 checkExistingInstallation()
             } catch (e: Exception) {
                 android.util.Log.e("LinuxSandbox", "Setup failed", e)
+                RuntimeDiagnosticsSink.Shared.record(
+                    RuntimeDiagnosticEvent("install_total", null, null, (System.nanoTime() - started) / 1_000_000, null, e.message),
+                )
                 marker = paths.readMarker()
                 _state.value = SandboxState.Error(e.message ?: "Setup failed")
             }

@@ -34,6 +34,8 @@ import com.inspiredandroid.kai.linux.ProotHandle
 import com.inspiredandroid.kai.linux.ProotLauncher
 import com.inspiredandroid.kai.runtime.EnvironmentRepairPlanner
 import com.inspiredandroid.kai.runtime.MoatazRuntimeContract
+import com.inspiredandroid.kai.runtime.RuntimeDiagnosticEvent
+import com.inspiredandroid.kai.runtime.RuntimeDiagnosticsSink
 import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toImmutableList
@@ -300,9 +302,92 @@ class BuildEnvironmentManager(
         if (installJob?.isActive == true) return
         installJob = scope.launch {
             _state.update { it.copy(environment = BuildEnvironmentState.Repairing, lastError = null) }
-            val health = EnvironmentDoctor(paths).diagnose()
-            val result = EnvironmentRepairExecutor(paths).execute(EnvironmentRepairPlanner.plan(health))
-            sync(result.detail)
+            val startedAt = System.nanoTime()
+            try {
+                val health = EnvironmentDoctor(paths).diagnose()
+                val result = EnvironmentRepairExecutor(paths).execute(EnvironmentRepairPlanner.plan(health))
+                if (result.requiresReinstall) {
+                    val detail = result.detail
+                        ?: "Moataz Runtime cannot be repaired in place; reinstalling preserves your projects"
+                    publishRuntimeFailure(
+                        code = "runtime_reinstall_required",
+                        title = "Moataz Runtime must be reinstalled",
+                        technicalDetail = detail,
+                        recoverable = false,
+                        recommendedAction = "Reinstall runtime",
+                    )
+                    recordRepairDiagnostic(startedAt, exitCode = 1, detail = detail)
+                    return@launch
+                }
+
+                sync(result.detail)
+                val finalState = _state.value
+                val healthy = finalState.environment is BuildEnvironmentState.Ready
+                recordRepairDiagnostic(
+                    startedAt,
+                    exitCode = if (healthy) 0 else 1,
+                    detail = if (healthy) null else finalState.lastError ?: result.detail,
+                )
+            } catch (cancelled: CancellationException) {
+                val detail = "Moataz Runtime repair was cancelled"
+                publishRuntimeFailure(
+                    code = "runtime_repair_cancelled",
+                    title = "Moataz Runtime repair was cancelled",
+                    technicalDetail = detail,
+                    recoverable = true,
+                    recommendedAction = "Repair",
+                )
+                recordRepairDiagnostic(startedAt, exitCode = -1, detail = detail)
+                throw cancelled
+            } catch (error: Exception) {
+                val detail = error.message?.takeIf { it.isNotBlank() }
+                    ?: error.javaClass.simpleName
+                Log.e(TAG, "Moataz Runtime repair failed", error)
+                publishRuntimeFailure(
+                    code = "runtime_repair_failed",
+                    title = "Moataz Runtime repair failed",
+                    technicalDetail = detail,
+                    recoverable = true,
+                    recommendedAction = "Repair",
+                )
+                recordRepairDiagnostic(startedAt, exitCode = 1, detail = detail)
+            }
+        }
+    }
+
+    private fun recordRepairDiagnostic(startedAt: Long, exitCode: Int, detail: String?) {
+        RuntimeDiagnosticsSink.Shared.record(
+            RuntimeDiagnosticEvent(
+                stage = "runtime_repair",
+                command = null,
+                exitCode = exitCode,
+                durationMillis = (System.nanoTime() - startedAt) / 1_000_000,
+                stderrTail = detail,
+                cause = detail,
+            ),
+        )
+    }
+
+    private fun publishRuntimeFailure(
+        code: String,
+        title: String,
+        technicalDetail: String,
+        recoverable: Boolean,
+        recommendedAction: String,
+    ) {
+        _state.update {
+            it.copy(
+                environment = BuildEnvironmentState.Error(
+                    code = code,
+                    title = title,
+                    technicalDetail = technicalDetail,
+                    recoverable = recoverable,
+                    recommendedAction = recommendedAction,
+                ),
+                installedAgents = persistentSetOf(),
+                systemInfo = null,
+                lastError = technicalDetail,
+            )
         }
     }
 
@@ -918,6 +1003,25 @@ class BuildEnvironmentManager(
      * which is what made the setup screen flash on every open.
      */
     private fun sync(error: String? = null) {
+        try {
+            syncInternal(error)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            val detail = failure.message?.takeIf { it.isNotBlank() }
+                ?: failure.javaClass.simpleName
+            Log.e(TAG, "Moataz Runtime health check failed", failure)
+            publishRuntimeFailure(
+                code = "runtime_health_check_failed",
+                title = "Moataz Runtime health check failed",
+                technicalDetail = detail,
+                recoverable = true,
+                recommendedAction = "Repair",
+            )
+        }
+    }
+
+    private fun syncInternal(error: String?) {
         // Debian only: an Alpine chat sandbox cannot host the agents, and Kai Build
         // then installs its own Debian somewhere else.
         val marker = paths.readMarker()

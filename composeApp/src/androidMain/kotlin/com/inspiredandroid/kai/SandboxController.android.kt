@@ -10,6 +10,9 @@ import com.inspiredandroid.kai.sandbox.importFileInto
 import com.inspiredandroid.kai.sandbox.openFileWithIntent
 import com.inspiredandroid.kai.sandbox.readFileAsText
 import com.inspiredandroid.kai.sandbox.toFileEntry
+import com.inspiredandroid.kai.runtime.RuntimeDiagnosticEvent
+import com.inspiredandroid.kai.runtime.RuntimeDiagnosticRedactor
+import com.inspiredandroid.kai.runtime.RuntimeDiagnosticsSink
 import io.github.vinceglb.filekit.PlatformFile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -277,15 +280,35 @@ class AndroidSandboxController : SandboxController {
         // from a wedged shell via reset() on the next call.
         val streamingTimeoutSeconds = 24L * 60 * 60
         scope.launch {
-            runCatching {
-                shell.run(
+            val started = System.nanoTime()
+            try {
+                deferred.complete(shell.run(
                     command = command,
                     timeoutSeconds = streamingTimeoutSeconds,
                     onStdout = onStdout,
                     onStderr = onStderr,
+                ))
+            } catch (cancelled: CancellationException) {
+                deferred.cancel(cancelled)
+                throw cancelled
+            } catch (failure: Exception) {
+                val detail = RuntimeDiagnosticRedactor.redact(
+                    failure.message?.takeIf { it.isNotBlank() } ?: "Moataz Terminal command failed",
                 )
-            }.onSuccess { deferred.complete(it) }
-                .onFailure { deferred.complete(mapOf("exit_code" to -1)) }
+                onStderr(detail)
+                android.util.Log.e("SandboxController", "Streaming command failed: $detail")
+                RuntimeDiagnosticsSink.Shared.record(
+                    RuntimeDiagnosticEvent(
+                        stage = "terminal_command",
+                        command = command,
+                        exitCode = -1,
+                        durationMillis = (System.nanoTime() - started) / 1_000_000,
+                        stderrTail = detail,
+                        cause = detail,
+                    ),
+                )
+                deferred.complete(mapOf("exit_code" to -1, "error" to detail))
+            }
         }
         return PersistentCommandHandle(shell, deferred, cancelled)
     }

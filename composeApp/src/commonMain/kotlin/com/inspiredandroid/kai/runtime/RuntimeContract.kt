@@ -156,14 +156,19 @@ data class EnvironmentRepairPlan(
 
 object EnvironmentRepairPlanner {
     fun plan(health: EnvironmentHealth): EnvironmentRepairPlan {
-        val actions = buildList {
+        val plannedActions = buildList {
             val missingPackages = health.issues.filterIsInstance<EnvironmentIssue.MissingCli>()
                 .map { executableToPackage(it.executable) }.distinct()
             if (missingPackages.isNotEmpty()) add(EnvironmentRepairAction.InstallPackages(missingPackages))
             if (health.issues.any { it is EnvironmentIssue.BrokenShell }) add(EnvironmentRepairAction.RepairShellAndUsrMerge)
             if (health.issues.any { it is EnvironmentIssue.WorkspaceMountMissing }) add(EnvironmentRepairAction.RestoreWorkspaceMounts)
             if (health.issues.any { it is EnvironmentIssue.MissingNative }) add(EnvironmentRepairAction.RestoreNativeRuntime)
-            if (health.issues.any { it is EnvironmentIssue.AgentBinaryBroken }) {
+            if (health.issues.any {
+                    it is EnvironmentIssue.BootProbeFailed ||
+                        it is EnvironmentIssue.PtyUnavailable ||
+                        it is EnvironmentIssue.AgentBinaryBroken
+                }
+            ) {
                 add(EnvironmentRepairAction.ReinstallRuntimePreservingProjects)
             }
             if (health.issues.any {
@@ -172,10 +177,15 @@ object EnvironmentRepairPlanner {
                         it is EnvironmentIssue.OldDebianVersion
                 }
             ) add(EnvironmentRepairAction.ReinstallRuntimePreservingProjects)
+        }.distinct().toMutableList()
+        // EnvironmentIssue is sealed today, but keep the planner fail-safe as it
+        // grows: a broken/degraded health report must never produce a no-op Repair.
+        if (health.issues.isNotEmpty() && plannedActions.isEmpty()) {
+            plannedActions += EnvironmentRepairAction.ReinstallRuntimePreservingProjects
         }
         return EnvironmentRepairPlan(
-            actions = actions,
-            requiresReinstall = actions.any { it is EnvironmentRepairAction.ReinstallRuntimePreservingProjects },
+            actions = plannedActions,
+            requiresReinstall = plannedActions.any { it is EnvironmentRepairAction.ReinstallRuntimePreservingProjects },
         )
     }
 

@@ -1,6 +1,7 @@
 package com.inspiredandroid.kai.linux
 
 import android.content.Context
+import android.os.StatFs
 import com.inspiredandroid.kai.runtime.RootfsManifest
 import com.inspiredandroid.kai.runtime.RuntimeReadinessGate
 import io.ktor.client.HttpClient
@@ -25,6 +26,8 @@ sealed interface InstallStep {
 
 private const val UPDATE_TIMEOUT_SECONDS = 300L
 private const val PACKAGE_TIMEOUT_SECONDS = 900L
+private const val MIN_RUNTIME_FREE_BYTES = 1024L * 1024 * 1024
+private const val RUNTIME_STORAGE_MULTIPLIER = 3L
 
 /**
  * Name of the pre-built Debian rootfs shipped inside the APK assets.
@@ -62,6 +65,11 @@ class LinuxInstaller(
             "proot binary not found at ${paths.prootPath}. nativeLibraryDir contents: " +
                 (File(paths.nativeLibDir).listFiles()?.map { it.name } ?: "empty")
         }
+        // Verify the packaged image metadata and available storage before
+        // touching an existing installation. A broken APK or full device must
+        // never turn an otherwise working runtime into a failed reinstall.
+        val embeddedManifest = loadEmbeddedManifest(spec)
+        requireSufficientStorage(embeddedManifest)
         paths.copyLibtalloc()
 
         // Wipe any partial/previous install so a retry after a failed package
@@ -77,10 +85,11 @@ class LinuxInstaller(
         val archive = paths.archiveFile(spec)
         val stagingRootfs = File(paths.root, "rootfs.staging")
         stagingRootfs.deleteRecursively()
+        var activated = false
         try {
             // Prefer the embedded, manifest-verified Debian image. Package and
             // CLI probes below remain authoritative; asset presence is not Ready.
-            val hasEmbeddedAsset = copyEmbeddedAsset(spec, archive)
+            val hasEmbeddedAsset = copyEmbeddedAsset(embeddedManifest, archive)
             if (!hasEmbeddedAsset) {
                 onStep(InstallStep.Download(0f))
                 if (distro == LinuxDistro.DEBIAN) {
@@ -94,18 +103,20 @@ class LinuxInstaller(
             onStep(InstallStep.Extract)
             val installContext = currentCoroutineContext()
             TarExtractor.extractSafe(archive, stagingRootfs) { installContext.ensureActive() }
+
+            currentCoroutineContext().ensureActive()
+            onStep(InstallStep.Configure)
+            spec.configure(stagingRootfs)
+            check(stagingRootfs.renameTo(paths.rootfsDir)) { "Could not atomically activate extracted rootfs" }
+            activated = true
+            paths.ensureMountPoints()
         } catch (e: Throwable) {
             stagingRootfs.deleteRecursively()
+            if (activated) paths.rootfsDir.deleteRecursively()
             throw e
         } finally {
             archive.delete()
         }
-
-        currentCoroutineContext().ensureActive()
-        onStep(InstallStep.Configure)
-        spec.configure(stagingRootfs)
-        check(stagingRootfs.renameTo(paths.rootfsDir)) { "Could not atomically activate extracted rootfs" }
-        paths.ensureMountPoints()
 
         val launcher = launcherFor(spec)
         try {
@@ -124,35 +135,100 @@ class LinuxInstaller(
         return RuntimeReadinessGate.commit(health, marker, paths::writeMarker)
     }
 
-    /**
-     * Copies the pre-built rootfs bundled inside the APK assets to [target].
-     *
-     * Returns true when the asset was found and copied, false when it is not
-     * available for this architecture (e.g. a device whose ABI is not arm64)
-     * and the network download path should be used instead.
-     */
-    private fun copyEmbeddedAsset(spec: DistroSpec, target: File): Boolean {
-        if (spec.distro != LinuxDistro.DEBIAN || !spec.arch().equals("arm64", ignoreCase = true)) return false
+    /** Missing images may download; present-but-invalid images always fail closed. */
+    private fun loadEmbeddedManifest(spec: DistroSpec): RootfsManifest? {
+        if (spec.distro != LinuxDistro.DEBIAN) return null
         val assetList = appContext.assets.list("") ?: emptyArray()
-        if (EMBEDDED_ROOTFS_MANIFEST !in assetList) return false
-        val manifest = runCatching {
+        if (EMBEDDED_ROOTFS_MANIFEST !in assetList) return null
+        val manifest = try {
             appContext.assets.open(EMBEDDED_ROOTFS_MANIFEST).bufferedReader().use {
                 Json { ignoreUnknownKeys = false }.decodeFromString<RootfsManifest>(it.readText())
             }
-        }.getOrNull() ?: return false
-        // Fail closed: an asset with a valid hash but the wrong distro/version/
-        // architecture is not a production Moataz Runtime image.
-        if (!manifest.isProductionRuntime()) return false
+        } catch (e: Exception) {
+            throw IllegalStateException("Moataz Runtime integrity error: embedded rootfs manifest is unreadable or corrupt", e)
+        }
+        check(manifest.isProductionRuntime()) {
+            "Moataz Runtime integrity error: embedded rootfs is not Debian 13 Trixie arm64 " +
+                "(${manifest.distro} ${manifest.version} ${manifest.architecture})"
+        }
+        check(manifest.architecture.equals(spec.arch(), ignoreCase = true)) {
+            "Moataz Runtime integrity error: embedded architecture ${manifest.architecture} " +
+                "does not match device architecture ${spec.arch()}"
+        }
+        val imageDigest = MessageDigest.getInstance("SHA-256")
+        manifest.assetParts.forEach { part ->
+            check(part.name in assetList) {
+                "Moataz Runtime integrity error: embedded rootfs part is missing: ${part.name}"
+            }
+            val partDigest = MessageDigest.getInstance("SHA-256")
+            var size = 0L
+            appContext.assets.open(part.name).use { input ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val bytesRead = input.read(buffer)
+                    if (bytesRead < 0) break
+                    partDigest.update(buffer, 0, bytesRead)
+                    imageDigest.update(buffer, 0, bytesRead)
+                    size += bytesRead
+                }
+            }
+            check(size == part.sizeBytes) {
+                "Moataz Runtime integrity error: embedded rootfs part size mismatch: ${part.name}"
+            }
+            val actualPartSha = partDigest.digest().joinToString("") { "%02x".format(it) }
+            check(actualPartSha == part.sha256) {
+                "Moataz Runtime integrity error: embedded rootfs part SHA-256 mismatch: ${part.name}"
+            }
+        }
+        val actualImageSha = imageDigest.digest().joinToString("") { "%02x".format(it) }
+        check(actualImageSha == manifest.sha256) {
+            "Moataz Runtime integrity error: embedded rootfs SHA-256 mismatch"
+        }
+        return manifest
+    }
+
+    private fun requireSufficientStorage(manifest: RootfsManifest?) {
+        val compressedBytes = manifest?.assetParts?.fold(0L) { total, part ->
+            check(total <= Long.MAX_VALUE - part.sizeBytes) {
+                "Moataz Runtime integrity error: embedded rootfs part sizes overflow"
+            }
+            total + part.sizeBytes
+        } ?: 0L
+        val expandedAllowance = if (compressedBytes > Long.MAX_VALUE / RUNTIME_STORAGE_MULTIPLIER) {
+            Long.MAX_VALUE
+        } else {
+            compressedBytes * RUNTIME_STORAGE_MULTIPLIER
+        }
+        val requiredBytes = maxOf(MIN_RUNTIME_FREE_BYTES, expandedAllowance)
+        val availableBytes = StatFs(paths.root.absolutePath).availableBytes
+        check(availableBytes >= requiredBytes) {
+            val bytesPerMiB = 1024L * 1024
+            val availableMiB = availableBytes / bytesPerMiB
+            val requiredMiB = requiredBytes / bytesPerMiB + if (requiredBytes % bytesPerMiB == 0L) 0 else 1
+            "Insufficient storage for Moataz Runtime: $availableMiB MiB available, " +
+                "$requiredMiB MiB required. Free up storage and try again; " +
+                "existing runtime and projects were not removed."
+        }
+    }
+
+    /** Copies a prevalidated embedded image, or returns false when no image exists. */
+    private fun copyEmbeddedAsset(manifest: RootfsManifest?, target: File): Boolean {
+        if (manifest == null) return false
+        val assetList = appContext.assets.list("") ?: emptyArray()
         target.parentFile?.mkdirs()
         FileOutputStream(target).use { output ->
             if (manifest.assetParts.isEmpty()) {
-                if (EMBEDDED_ROOTFS_ASSET !in assetList) return false
+                check(EMBEDDED_ROOTFS_ASSET in assetList) {
+                    "Moataz Runtime integrity error: embedded rootfs archive is missing"
+                }
                 appContext.assets.open(EMBEDDED_ROOTFS_ASSET).use { input ->
                     input.copyTo(output, 64 * 1024)
                 }
             } else {
                 manifest.assetParts.forEach { part ->
-                    check(part.name in assetList) { "Embedded rootfs part is missing: ${part.name}" }
+                    check(part.name in assetList) {
+                        "Moataz Runtime integrity error: embedded rootfs part is missing: ${part.name}"
+                    }
                     val digest = MessageDigest.getInstance("SHA-256")
                     var size = 0L
                     appContext.assets.open(part.name).use { input ->
@@ -165,12 +241,18 @@ class LinuxInstaller(
                         }
                     }
                     val partSha = digest.digest().joinToString("") { "%02x".format(it) }
-                    check(size == part.sizeBytes) { "Embedded rootfs part size mismatch: ${part.name}" }
-                    check(partSha == part.sha256) { "Embedded rootfs part SHA-256 mismatch: ${part.name}" }
+                    check(size == part.sizeBytes) {
+                        "Moataz Runtime integrity error: embedded rootfs part size mismatch: ${part.name}"
+                    }
+                    check(partSha == part.sha256) {
+                        "Moataz Runtime integrity error: embedded rootfs part SHA-256 mismatch: ${part.name}"
+                    }
                 }
             }
         }
-        check(target.sha256() == manifest.sha256) { "Embedded rootfs SHA-256 mismatch" }
+        check(target.sha256() == manifest.sha256) {
+            "Moataz Runtime integrity error: embedded rootfs SHA-256 mismatch"
+        }
         return true
     }
 
