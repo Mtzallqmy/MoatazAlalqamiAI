@@ -9,9 +9,9 @@ import kotlinx.serialization.json.Json
 enum class ApprovalMode {
     /** Ask before every tool call. */
     Safe,
-    /** Auto-approve SafeRead and LocalWrite; ask for NetworkWrite/Dangerous. */
+    /** Auto-approve reads and /workspace writes; ask for network, installs and higher risks. */
     Balanced,
-    /** Auto-approve SafeRead, LocalWrite, and NetworkWrite; ask for Dangerous only. */
+    /** Compatibility mode; precise network/install/external/destructive tiers still ask. */
     Autonomous,
 }
 
@@ -19,17 +19,18 @@ enum class ApprovalMode {
  * Human-readable categories assigned to tools by the registry. Categories map
  * to [ToolRisk] so that approval policy decisions stay consistent even when
  * risk semantics evolve. Note that [CredentialAccess] and [Destructive] map
- * straight to [ToolRisk.Dangerous]: access to stored secrets and irreversible
+ * straight to [ToolRisk.Destructive]: access to stored secrets and irreversible
  * actions always require explicit approval.
  */
 enum class ToolCategory(val risk: ToolRisk, val displayName: String) {
     ReadOnly(ToolRisk.SafeRead, "Read Only"),
-    LocalWrite(ToolRisk.LocalWrite, "Local Write"),
-    ExternalWrite(ToolRisk.NetworkWrite, "External Write"),
-    Network(ToolRisk.NetworkWrite, "Network"),
-    SensitiveData(ToolRisk.NetworkWrite, "Sensitive Data"),
-    Destructive(ToolRisk.Dangerous, "Destructive"),
-    CredentialAccess(ToolRisk.Dangerous, "Credential Access"),
+    LocalWrite(ToolRisk.WorkspaceWrite, "Workspace Write"),
+    ExternalWrite(ToolRisk.ExternalEffect, "External Effect"),
+    Network(ToolRisk.Network, "Network"),
+    PackageInstall(ToolRisk.PackageInstall, "Package Install"),
+    SensitiveData(ToolRisk.Network, "Sensitive Data"),
+    Destructive(ToolRisk.Destructive, "Destructive"),
+    CredentialAccess(ToolRisk.Destructive, "Credential Access"),
 }
 
 /**
@@ -93,14 +94,19 @@ class ApprovalEngine(
         return when (mode) {
             ApprovalMode.Safe -> ApprovalDecision.NeedsApproval("Safe mode asks before every action")
             ApprovalMode.Balanced -> when (risk) {
-                ToolRisk.SafeRead, ToolRisk.LocalWrite -> ApprovalDecision.AutoApproved
+                ToolRisk.SafeRead, ToolRisk.WorkspaceWrite, ToolRisk.LocalWrite -> ApprovalDecision.AutoApproved
+                ToolRisk.Network, ToolRisk.PackageInstall, ToolRisk.ExternalEffect, ToolRisk.Destructive,
                 ToolRisk.NetworkWrite, ToolRisk.Dangerous -> ApprovalDecision.NeedsApproval(
                     "${risk.name} action requires approval in Balanced mode",
                 )
             }
             ApprovalMode.Autonomous -> when (risk) {
-                ToolRisk.SafeRead, ToolRisk.LocalWrite, ToolRisk.NetworkWrite -> ApprovalDecision.AutoApproved
-                ToolRisk.Dangerous -> ApprovalDecision.NeedsApproval("Dangerous action requires explicit approval")
+                ToolRisk.SafeRead, ToolRisk.WorkspaceWrite, ToolRisk.LocalWrite,
+                ToolRisk.NetworkWrite -> ApprovalDecision.AutoApproved
+                ToolRisk.Network, ToolRisk.PackageInstall, ToolRisk.ExternalEffect, ToolRisk.Destructive,
+                ToolRisk.Dangerous -> ApprovalDecision.NeedsApproval(
+                    "${risk.name} action requires explicit approval",
+                )
             }
         }
     }
@@ -149,6 +155,32 @@ class ApprovalEngine(
             else -> null
         }
     }
+
+    companion object {
+        /** Elevates generic terminal/file tools using their structured arguments. */
+        fun classifyCommandRisk(toolId: String, argsJson: String?, fallback: ToolRisk): ToolRisk {
+            val value = argsJson.orEmpty().lowercase()
+            if (toolId == "fs.delete") return ToolRisk.Destructive
+            if (toolId in setOf("fs.write", "fs.patch", "fs.move")) {
+                val paths = Regex("(?:\\\"(?:path|from|to)\\\"\\s*:\\s*\\\"|(?:path|from|to)=)(/[^\\\",}\\s]+)")
+                    .findAll(value)
+                    .map { it.groupValues[1] }
+                    .toList()
+                if (paths.any { it != "/workspace" && !it.startsWith("/workspace/") }) return ToolRisk.Destructive
+            }
+            if (toolId !in setOf("terminal.exec", "terminal.exec_stream")) return fallback
+
+            val external = listOf("git push", "gh pr create", "deploy", "publish", "release")
+            if (external.any(value::contains)) return ToolRisk.ExternalEffect
+            val destructive = listOf("rm -", "git clean", "reset --hard", "truncate ", "shred ")
+            if (destructive.any(value::contains)) return ToolRisk.Destructive
+            val installs = listOf("apt install", "apt-get install", "npm install", "pnpm add", "yarn add", "pip install", "pipx install", "cargo install")
+            if (installs.any(value::contains)) return ToolRisk.PackageInstall
+            val network = listOf("curl ", "wget ", "ssh ", "git clone", "git fetch", "git pull")
+            if (network.any(value::contains)) return ToolRisk.Network
+            return fallback
+        }
+    }
 }
 
 /**
@@ -163,9 +195,7 @@ class AgentRunStore(private val appSettings: com.inspiredandroid.kai.data.AppSet
     }.getOrDefault(emptyList())
 
     fun saveRuns(runs: List<AgentRun>) {
-        runCatching {
-            appSettings.settings.putString(KEY_RUNS, json.encodeToString(runs.takeLast(MAX_RUNS)))
-        }
+        appSettings.settings.putString(KEY_RUNS, json.encodeToString(runs.takeLast(MAX_RUNS)))
     }
 
     fun loadPending(): List<PendingApproval> = runCatching {
@@ -174,9 +204,7 @@ class AgentRunStore(private val appSettings: com.inspiredandroid.kai.data.AppSet
     }.getOrDefault(emptyList())
 
     fun savePending(list: List<PendingApproval>) {
-        runCatching {
-            appSettings.settings.putString(KEY_PENDING, json.encodeToString(list))
-        }
+        appSettings.settings.putString(KEY_PENDING, json.encodeToString(list))
     }
 
     fun loadAgents(): List<AgentConfig> = runCatching {

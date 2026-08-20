@@ -28,12 +28,11 @@ class AgentRunExecutor(
     private val onStatusTransition: (run: AgentRun, status: RunStatus, finishedAt: Long) -> Unit,
     private val onStepUpdate: (run: AgentRun, step: AgentStep) -> Unit,
     private val onRunFinished: (run: AgentRun) -> Unit,
+    private val onFailure: (run: AgentRun, failure: Throwable) -> Unit = { _, _ -> },
 ) {
 
     /** Handle given to the body so it can drive the run itself. */
     class RunHandle(val run: AgentRun) {
-        /** Moves the run from Queued to Running once execution begins. */
-        fun start() = Unit
 
         /** Marks a step done/failed/rejected with a finishedAt timestamp. */
         fun completeStep(step: AgentStep, status: StepStatus): AgentStep =
@@ -48,33 +47,31 @@ class AgentRunExecutor(
      * Launches [run] with [body] as the step loop. The returned [Job] is the
      * *single* object callers use to cancel the run.
      */
-    fun run(run: AgentRun, body: suspend RunHandle.() -> Unit): Job {
+    fun run(run: AgentRun, body: suspend RunHandle.() -> RunStatus): Job {
         val handle = RunHandle(run)
-        var finished = false
         val job = scope.launch {
+            var terminalStatus = RunStatus.Failed
             try {
                 onStatusTransition(run, RunStatus.Running, System.currentTimeMillis())
-                handle.body()
-                if (!finished) onStatusTransition(run, RunStatus.Completed, System.currentTimeMillis())
+                terminalStatus = handle.body()
+                require(terminalStatus in TERMINAL_STATUSES) {
+                    "Run body must return a terminal status, got $terminalStatus"
+                }
             } catch (ce: CancellationException) {
-                // Never swallow, wrap, or convert — cancellation propagates.
+                terminalStatus = RunStatus.Cancelled
                 throw ce
             } catch (t: Throwable) {
-                // A crash becomes Failed — the UI never sees a live dead run.
-                onStatusTransition(run, RunStatus.Failed, System.currentTimeMillis())
-            }
-        }
-        job.invokeOnCompletion { cause ->
-            if (cause is CancellationException) {
-                // Caller cancelled (or the body re-threw): the run MUST end
-                // Cancelled — never stuck in Running.
-                if (!finished) {
-                    onStatusTransition(run, RunStatus.Cancelled, System.currentTimeMillis())
-                    finished = true
-                }
+                terminalStatus = RunStatus.Failed
+                onFailure(run, t)
+            } finally {
+                onStatusTransition(run, terminalStatus, System.currentTimeMillis())
                 onRunFinished(run)
             }
         }
         return job
+    }
+
+    companion object {
+        private val TERMINAL_STATUSES = setOf(RunStatus.Completed, RunStatus.Failed, RunStatus.Cancelled)
     }
 }

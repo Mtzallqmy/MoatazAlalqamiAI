@@ -1,14 +1,18 @@
 package com.inspiredandroid.kai.agents
 
-import com.inspiredandroid.kai.gateway.AiRequestOutcome
 import com.inspiredandroid.kai.brand.AssistantIdentity
-import com.inspiredandroid.kai.tools.ToolRiskLevel
+import com.inspiredandroid.kai.runtime.RuntimeDiagnosticRedactor
+import com.inspiredandroid.kai.tools.ExecToolResult
 import com.inspiredandroid.kai.tools.ToolResult
+import com.inspiredandroid.kai.tools.ToolRiskLevel
 import com.inspiredandroid.kai.tools.ToolRuntime
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,30 +21,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.min
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
-/**
- * The agent orchestrator — the loop that turns one user request into a
- * supervised, multi-step agent run:
- *
- *   prompt → think (LLM) → plan tool calls → approval gate → execute tools →
- *   observe results → think again → … → finish/timeout/error/recover
- *
- * Built on the platform contracts, never the raw implementations:
- * - `ToolRuntime` for the 23 sandbox tools (local or remote backend agnostic)
- * - `ApprovalEngine` for the Safe/Balanced/Autonomous gate
- * - `AgentRunStore` for persistence of runs, steps and pending approvals
- * - an injected LLM delegate (normally the AI Gateway's executor) so the
- *   orchestrator stays commonMain-clean
- *
- * Failure-recovery policy: up to [RecoveryPolicy.maxConsecutiveFailures]
- * consecutive tool failures trigger an explicit recovery-think step that asks
- * the LLM to diagnose and retry with a different approach; beyond that the
- * run finishes in [RunStatus.Failed] with the error surfaced in the activity
- * timeline instead of being retried into a burn rate.
- */
+/** Provider-independent, evidence-driven execution loop for agent runs. */
 class AgentOrchestrator(
     private val toolRuntime: ToolRuntime,
     private val approvalEngine: ApprovalEngine,
@@ -48,369 +35,554 @@ class AgentOrchestrator(
     private val approvalMode: () -> ApprovalMode,
     private val llm: LlmDelegate,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    val recoveryPolicy: RecoveryPolicy = RecoveryPolicy.DEFAULT,
+    private val callTool: suspend (String, Map<String, Any?>) -> ToolResult = toolRuntime::call,
+    private val now: () -> Long = { System.currentTimeMillis() },
 ) {
-
-    /** Streams activity events (tool calls, approvals, errors) to the UI. */
     private val _activity = MutableSharedFlow<OrchestratorActivityEvent>(extraBufferCapacity = 256)
     val activity: SharedFlow<OrchestratorActivityEvent> = _activity.asSharedFlow()
 
-    /** In-flight runs by id. */
-    private val _runs = MutableStateFlow<Map<String, AgentRun>>(emptyMap())
+    private val restoredRuns = runStore.loadRuns().associateBy { it.id }.mapValues { (_, run) ->
+        if (run.status in ACTIVE_STATUSES) run.copy(status = RunStatus.Paused) else run
+    }
+    private val _runs = MutableStateFlow(restoredRuns)
     val runs: StateFlow<Map<String, AgentRun>> = _runs.asStateFlow()
-
-    /** Pending approvals awaiting a human decision. */
     private val _pending = MutableStateFlow<List<PendingApproval>>(runStore.loadPending())
     val pendingApprovals: StateFlow<List<PendingApproval>> = _pending.asStateFlow()
 
-    private val decisions = mutableMapOf<String, ApprovalDecision>()
+    private val approvalWaiters = mutableMapOf<String, CompletableDeferred<ApprovalDecision>>()
+    private val jobs = mutableMapOf<String, Job>()
+    private val executor = AgentRunExecutor(
+        scope = scope,
+        onStatusTransition = { run, status, finishedAt ->
+            updateRun(run.id) { current ->
+                current.copy(
+                    status = status,
+                    phase = status.toTerminalPhase(current.phase),
+                    finishedAt = if (status in TERMINAL_STATUSES) finishedAt else current.finishedAt,
+                )
+            }
+        },
+        onStepUpdate = { _, _ -> },
+        onRunFinished = { run -> jobs.remove(run.id) },
+        onFailure = { run, failure ->
+            appendFailureStep(run.id, StepKind.Error, "Agent run crashed", failure.message ?: failure::class.simpleName.orEmpty())
+        },
+    )
 
-    val recoveryPolicy: RecoveryPolicy = RecoveryPolicy.DEFAULT
-
-    fun startRun(agentConfig: AgentConfig, prompt: String, projectContext: String = "") {
+    fun startRun(agentConfig: AgentConfig, prompt: String, projectContext: String = ""): String {
+        require(prompt.isNotBlank()) { "Agent prompt must not be blank" }
         val run = AgentRun(
             id = newId(),
             agentId = agentConfig.id,
             agentName = agentConfig.name,
             projectId = agentConfig.projectId,
-            prompt = prompt,
+            prompt = safe(prompt),
         )
-        _runs.update { it + (run.id to run) }
-        scope.launch { runLoop(run, agentConfig, projectContext) }
+        putRun(run)
+        launch(run, agentConfig, projectContext, resume = false)
+        return run.id
+    }
+
+    fun resumeRun(runId: String, agentConfig: AgentConfig, projectContext: String = ""): Boolean {
+        val run = _runs.value[runId] ?: return false
+        if (run.status !in setOf(RunStatus.Paused, RunStatus.Failed)) return false
+        _pending.value.filter { it.runId == runId }.forEach { removePending(it.id) }
+        updateRun(runId) { it.copy(status = RunStatus.Queued, finishedAt = null) }
+        launch(_runs.value.getValue(runId), agentConfig, projectContext, resume = true)
+        emitActivity(runId, OrchestratorActivityEvent.Type.Resumed, "Resumed from ${run.checkpoint.phase}")
+        return true
+    }
+
+    fun cancelRun(runId: String): Boolean {
+        val job = jobs[runId] ?: return false
+        _pending.value.filter { it.runId == runId }.forEach { approvalWaiters[it.id]?.cancel() }
+        job.cancel(CancellationException("Cancelled by user"))
+        return true
     }
 
     fun approve(id: String) = resolveApproval(id, ApprovalDecision.AutoApproved)
-
     fun reject(id: String) = resolveApproval(id, ApprovalDecision.Blocked("Rejected by user"))
 
+    private fun launch(run: AgentRun, config: AgentConfig, projectContext: String, resume: Boolean) {
+        val job = executor.run(run) {
+            try {
+                withTimeout(config.maxDurationMs.coerceAtLeast(1L)) {
+                    runLoop(run.id, config, projectContext, resume)
+                }
+            } catch (_: TimeoutCancellationException) {
+                val reason = "Time budget exceeded: ${config.maxDurationMs} ms"
+                appendFailureStep(run.id, StepKind.Error, reason, "")
+                emitActivity(run.id, OrchestratorActivityEvent.Type.BudgetExhausted, reason)
+                RunStatus.Failed
+            }
+        }
+        jobs[run.id] = job
+        job.invokeOnCompletion { if (jobs[run.id] === job) jobs.remove(run.id) }
+    }
+
     private fun resolveApproval(id: String, decision: ApprovalDecision) {
-        val pending = _pending.value.find { it.id == id }
-        if (pending != null) {
-            ApprovalAuditLog.record(
-                toolId = pending.toolName,
-                toolRisk = pending.toolRisk.name,
-                argsSummary = pending.argsSummary,
-                verdict = if (decision is ApprovalDecision.Blocked) ApprovalAuditLog.Verdict.Rejected else ApprovalAuditLog.Verdict.Approved,
-            )
-        }
-        decisions[id] = decision
-        _pending.update { pendingList -> pendingList.filterNot { it.id == id } }
-        runStore.savePending(_pending.value)
+        val pending = _pending.value.find { it.id == id } ?: return
+        ApprovalAuditLog.record(
+            toolId = pending.toolName,
+            toolRisk = pending.toolRisk.name,
+            argsSummary = safe(pending.argsSummary),
+            verdict = if (decision is ApprovalDecision.Blocked) ApprovalAuditLog.Verdict.Rejected else ApprovalAuditLog.Verdict.Approved,
+        )
+        removePending(id)
+        approvalWaiters.remove(id)?.complete(decision)
     }
 
-    private suspend fun runLoop(run: AgentRun, config: AgentConfig, projectContext: String) {
-        try {
-            _runs.update { it + (run.id to run.copy(status = RunStatus.Running)) }
-            emitActivity(run.id, OrchestratorActivityEvent.Type.Started, run.prompt)
+    private suspend fun runLoop(runId: String, config: AgentConfig, projectContext: String, resume: Boolean): RunStatus {
+        val restored = currentRun(runId)
+        emitActivity(runId, OrchestratorActivityEvent.Type.Started, restored.prompt)
+        if (!resume) transition(runId, AgentPhase.Request)
+        val history = mutableListOf(
+            LlmMessage("system", buildSystemPrompt(config)),
+            LlmMessage("user", restored.prompt + contextSuffix(projectContext)),
+        )
+        if (resume) history += LlmMessage("system", checkpointSummary(restored))
 
-            val context = buildContext(projectContext)
-            var messageHistory = mutableListOf<LlmMessage>(LlmMessage(role = "system", content = buildSystemPrompt(config)))
-            var remainingSteps = config.maxSteps.coerceIn(1, 1000)
-            var consecutiveFailures = 0
+        var checkpoint = restored.checkpoint
+        var verification = checkpoint.verification
+        var consecutiveFailures = checkpoint.consecutiveFailures
+        val fingerprints = checkpoint.actionFingerprints.toMutableMap()
 
-            while (remainingSteps > 0 && _runs.value[run.id]?.status == RunStatus.Running) {
-                remainingSteps--
+        while (checkpoint.completedSteps < config.maxSteps.coerceIn(1, 1000)) {
+            if (currentRun(runId).estimatedCostUsd > config.maxEstimatedCostUsd) {
+                val reason = "Cost budget exceeded: ${currentRun(runId).estimatedCostUsd} > ${config.maxEstimatedCostUsd} USD"
+                appendFailureStep(runId, StepKind.Error, reason, "")
+                emitActivity(runId, OrchestratorActivityEvent.Type.BudgetExhausted, reason)
+                return RunStatus.Failed
+            }
+            val planningPhase = if (consecutiveFailures > 0) AgentPhase.Repairing else AgentPhase.Planning
+            transition(runId, planningPhase)
+            checkpoint = checkpoint.copy(phase = planningPhase, updatedAt = now())
+            val response = completeWithRetry(runId, config, history) ?: return RunStatus.Failed
+            applyUsage(runId, response.usage)
+            if (currentRun(runId).estimatedCostUsd > config.maxEstimatedCostUsd) {
+                val reason = "Cost budget exceeded after provider response: ${currentRun(runId).estimatedCostUsd} USD"
+                appendFailureStep(runId, StepKind.Error, reason, "")
+                emitActivity(runId, OrchestratorActivityEvent.Type.BudgetExhausted, reason)
+                return RunStatus.Failed
+            }
+            checkpoint = checkpoint.copy(completedSteps = checkpoint.completedSteps + 1, updatedAt = now())
+            saveCheckpoint(runId, checkpoint.copy(verification = verification))
 
-                // 1. Think: ask the LLM for the next step given the full history.
-                val response = try {
-                    llm.complete(LlmCompletionRequest(messages = messageHistory, tools = toolRuntime.availableToolIds()))
-                } catch (ce: CancellationException) {
-                    finishRun(run.id, RunStatus.Cancelled)
-                    throw ce
-                } catch (e: Exception) {
-                    appendFailureStep(run.id, StepKind.Error, "LLM unavailable: ${e.message ?: e::class.simpleName}", "")
-                    emitActivity(run.id, OrchestratorActivityEvent.Type.LlmError, e.message ?: "LLM call failed")
-                    if (recoveryPolicy.isRetriableLlmError(e)) {
-                        delay(recoveryPolicy.retryDelay)
-                        continue
-                    }
-                    finishRun(run.id, RunStatus.Failed)
-                    break
+            if (response.content.isNotBlank()) {
+                appendStep(runId, StepKind.Plan, if (consecutiveFailures > 0) "Repair plan" else "Plan", safe(response.content))
+            }
+            if (response.isFinalAnswer) {
+                transition(runId, AgentPhase.Delivering)
+                if (!verification.deliveryProven) {
+                    val reason = verificationFailure(verification)
+                    appendFailureStep(runId, StepKind.Summary, "Delivery rejected: unverified result", reason)
+                    emitActivity(runId, OrchestratorActivityEvent.Type.VerificationFailed, reason)
+                    return RunStatus.Failed
+                }
+                appendStep(runId, StepKind.Summary, "Verified delivery", safe(response.content))
+                transition(runId, AgentPhase.Completed)
+                emitActivity(runId, OrchestratorActivityEvent.Type.Finished, safe(response.content))
+                return RunStatus.Completed
+            }
+
+            val calls = response.toolCalls.filter { isAllowed(config, it.toolId) }
+            if (response.toolCalls.isNotEmpty() && calls.isEmpty()) {
+                appendFailureStep(runId, StepKind.ApprovalRequest, "All tool calls blocked by policy", "")
+                emitActivity(runId, OrchestratorActivityEvent.Type.Blocked, "No proposed tool is allowed")
+                return RunStatus.Failed
+            }
+            if (calls.isEmpty()) {
+                consecutiveFailures++
+                history += LlmMessage("tool", "No executable action was proposed; provide a concrete tool call.")
+                if (consecutiveFailures >= recoveryPolicy.maxConsecutiveFailures) return RunStatus.Failed
+                continue
+            }
+
+            for (call in calls) {
+                val fingerprint = "${call.toolId}:${call.argsJson ?: call.args.toString()}"
+                val repeats = (fingerprints[fingerprint] ?: 0) + 1
+                fingerprints[fingerprint] = repeats
+                if (repeats > config.maxRepeatedAction.coerceAtLeast(1)) {
+                    val reason = "Loop detected: ${call.toolId} repeated $repeats times with identical arguments"
+                    appendFailureStep(runId, StepKind.Error, reason, "")
+                    emitActivity(runId, OrchestratorActivityEvent.Type.LoopDetected, reason)
+                    return RunStatus.Failed
                 }
 
-                if (response.isFinalAnswer) {
-                    appendStep(run.id, StepKind.Summary, "Completed", response.content)
-                    emitActivity(run.id, OrchestratorActivityEvent.Type.Finished, response.content.take(200))
-                    finishRun(run.id, RunStatus.Completed)
-                    break
+                val risk = effectiveRisk(call)
+                val decision = awaitDecision(runId, config, call, risk, approvalEngine.decide(call.toolId, risk, approvalMode(), call.argsJson))
+                if (decision is ApprovalDecision.Blocked) {
+                    consecutiveFailures++
+                    appendFailureStep(runId, StepKind.ApprovalRequest, "Rejected: ${decision.reason}", "")
+                    history += LlmMessage("tool", "${call.toolId} was not executed: ${decision.reason}")
+                    continue
                 }
 
-                // 2. Gate: approval before any tool call.
-                val pendingTools = response.toolCalls.filter { isAllowed(config, it.toolId) }
-                if (response.toolCalls.isNotEmpty() && pendingTools.isEmpty()) {
-                    appendStep(run.id, StepKind.ApprovalRequest, "All tool calls blocked by agent policy", "")
-                    emitActivity(run.id, OrchestratorActivityEvent.Type.Blocked, "Tool calls not allowed for this agent")
-                    finishRun(run.id, RunStatus.Failed)
-                    break
-                }
-
-                // 3. Execute each approved tool call.
-                for (call in pendingTools) {
-                    val decision = approvalEngine.decide(
-                        toolId = call.toolId,
-                        risk = mapRisk(toolRuntime.riskLevelFor(call.toolId)),
-                        mode = approvalMode(),
-                        argsJson = call.argsJson,
-                    )
-                    when (decision) {
-                        is ApprovalDecision.AutoApproved -> {
-                            ApprovalAuditLog.record(
-                                toolId = call.toolId,
-                                toolRisk = toolRuntime.riskLevelFor(call.toolId).name,
-                                argsSummary = call.argsJson.orEmpty().take(120),
-                                verdict = ApprovalAuditLog.Verdict.AutoApproved,
-                            )
-                            executeToolCall(run, config, call)
-                        }
-                        is ApprovalDecision.Blocked -> {
-                            ApprovalAuditLog.record(
-                                toolId = call.toolId,
-                                toolRisk = toolRuntime.riskLevelFor(call.toolId).name,
-                                argsSummary = call.argsJson.orEmpty().take(120),
-                                verdict = ApprovalAuditLog.Verdict.Blocked,
-                                note = decision.reason,
-                            )
-                            appendStep(run.id, StepKind.Error, "Blocked: ${decision.reason}", "")
-                            consecutiveFailures++
-                        }
-                        is ApprovalDecision.NeedsApproval -> {
-                            val approvalId = newId()
-                            val stepId = appendStep(run.id, StepKind.ApprovalRequest, "Waiting approval: ${call.toolId}", call.argsJson ?: "")
-                            val pending = PendingApproval(
-                                id = approvalId,
-                                runId = run.id,
-                                agentId = config.id,
-                                stepId = stepId,
-                                toolId = call.toolId,
-                                toolName = call.toolId,
-                                toolRisk = mapRisk(toolRuntime.riskLevelFor(call.toolId)),
-                                argsSummary = (call.argsJson ?: "").take(500),
-                                explanation = decision.reason,
-                            )
-                            _pending.update { (it + pending).takeLast(50) }
-                            runStore.savePending(_pending.value)
-                            _runs.update {
-                                it + (run.id to (it[run.id] ?: run).copy(status = RunStatus.WaitingApproval))
-                            }
-                            emitActivity(run.id, OrchestratorActivityEvent.Type.WaitingApproval, "${call.toolId}: ${decision.reason}")
-
-                            var wait = 0
-                            while (wait < APPROVAL_TIMEOUT_MINUTES * 6 && decisions[approvalId] == null) {
-                                delay(10_000L)
-                                wait++
-                                if (_runs.value[run.id]?.status == RunStatus.Cancelled) return
-                            }
-                            val taken = decisions.remove(approvalId) ?: ApprovalDecision.Blocked("Approval timed out")
-                            when (taken) {
-                                is ApprovalDecision.AutoApproved -> executeToolCall(run, config, call)
-                                is ApprovalDecision.Blocked -> {
-                                    appendFailureStep(run.id, StepKind.ApprovalRequest, "Rejected: ${taken.reason}", "")
-                                    consecutiveFailures++
-                                }
-                                else -> {}
-                            }
-                        }
-                    }
-                }
-
+                transition(runId, phaseFor(call))
+                val execution = executeWithRetry(runId, config, call)
+                transition(runId, AgentPhase.Observing)
+                verification = verification.observe(call, execution)
+                val observation = execution.observation()
+                history += LlmMessage("assistant", safe(response.toHistoryText()))
+                history += LlmMessage("tool", observation)
+                emitActivity(runId, OrchestratorActivityEvent.Type.Observation, observation.take(1000))
+                consecutiveFailures = if (execution.succeeded) 0 else consecutiveFailures + 1
+                checkpoint = checkpoint.copy(
+                    completedSteps = checkpoint.completedSteps + 1,
+                    consecutiveFailures = consecutiveFailures,
+                    actionFingerprints = fingerprints.toMap(),
+                    verification = verification,
+                    phase = currentRun(runId).phase,
+                    updatedAt = now(),
+                )
+                saveCheckpoint(runId, checkpoint)
+                if (checkpoint.completedSteps >= config.maxSteps) break
                 if (consecutiveFailures >= recoveryPolicy.maxConsecutiveFailures) {
-                    appendStep(run.id, StepKind.Error, "Too many consecutive failures (${consecutiveFailures}) — run ended by recovery policy", "")
-                    finishRun(run.id, RunStatus.Failed)
-                    break
+                    appendFailureStep(runId, StepKind.Error, "Recovery stopped after $consecutiveFailures failures", observation)
+                    return RunStatus.Failed
                 }
-
-                // 4. Feed observation back and continue the loop.
-                messageHistory += response.toHistoryMessages()
             }
+        }
+        appendFailureStep(runId, StepKind.Summary, "Step budget exhausted", "Stopped after ${config.maxSteps} steps")
+        emitActivity(runId, OrchestratorActivityEvent.Type.BudgetExhausted, "${config.maxSteps} steps")
+        return RunStatus.Failed
+    }
 
-            if (remainingSteps <= 0 && _runs.value[run.id]?.status == RunStatus.Running) {
-                appendStep(run.id, StepKind.Summary, "Step budget exhausted", "Run stopped after ${config.maxSteps} steps")
-                emitActivity(run.id, OrchestratorActivityEvent.Type.BudgetExhausted, "${config.maxSteps} steps")
-                finishRun(run.id, RunStatus.Failed)
+    private suspend fun completeWithRetry(runId: String, config: AgentConfig, history: List<LlmMessage>): LlmCompletionResponse? {
+        val request = LlmCompletionRequest(history, toolRuntime.availableToolIds())
+        val attempts = config.maxRetriesPerAction.coerceIn(0, 5) + 1
+        repeat(attempts) { attempt ->
+            try {
+                return llm.completeStreaming(request) { delta ->
+                    emitActivity(runId, OrchestratorActivityEvent.Type.ModelDelta, safe(delta))
+                }
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (e: Exception) {
+                val retry = recoveryPolicy.isRetriableLlmError(e) && attempt + 1 < attempts
+                emitActivity(runId, OrchestratorActivityEvent.Type.LlmError, e.message ?: "LLM call failed")
+                if (!retry) {
+                    appendFailureStep(runId, StepKind.Error, "LLM unavailable", e.message ?: "unknown error")
+                    return null
+                }
+                emitActivity(runId, OrchestratorActivityEvent.Type.Retrying, "LLM retry ${attempt + 1}/$attempts")
+                delay(recoveryPolicy.delayFor(attempt))
             }
-        } catch (ce: CancellationException) {
-            finishRun(run.id, RunStatus.Cancelled)
-            throw ce
+        }
+        return null
+    }
+
+    private suspend fun awaitDecision(
+        runId: String,
+        config: AgentConfig,
+        call: LlmToolCall,
+        risk: ToolRisk,
+        decision: ApprovalDecision,
+    ): ApprovalDecision = when (decision) {
+        ApprovalDecision.AutoApproved -> {
+            ApprovalAuditLog.record(call.toolId, risk.name, safe(call.argsJson.orEmpty()), ApprovalAuditLog.Verdict.AutoApproved)
+            decision
+        }
+        is ApprovalDecision.Blocked -> decision
+        is ApprovalDecision.NeedsApproval -> {
+            val approvalId = newId()
+            val stepId = appendStep(runId, StepKind.ApprovalRequest, "Waiting approval: ${call.toolId}", safe(call.argsJson.orEmpty()), StepStatus.WaitingApproval)
+            val pending = PendingApproval(
+                id = approvalId, runId = runId, agentId = currentRun(runId).agentId, stepId = stepId,
+                toolId = call.toolId, toolName = call.toolId, toolRisk = risk,
+                argsSummary = safe(call.argsJson.orEmpty()), explanation = safe(decision.reason),
+            )
+            val waiter = CompletableDeferred<ApprovalDecision>()
+            approvalWaiters[approvalId] = waiter
+            _pending.update { (it + pending).takeLast(50) }
+            persistPending()
+            updateRun(runId) { it.copy(status = RunStatus.WaitingApproval) }
+            transition(runId, AgentPhase.AwaitingApproval)
+            emitActivity(runId, OrchestratorActivityEvent.Type.WaitingApproval, "${call.toolId}: ${decision.reason}")
+            try {
+                withTimeoutOrNull(config.approvalTimeoutMs.coerceAtLeast(1L)) { waiter.await() }
+                    ?: ApprovalDecision.Blocked("Approval timed out")
+            } finally {
+                approvalWaiters.remove(approvalId)
+                removePending(approvalId)
+                updateRun(runId) { it.copy(status = RunStatus.Running) }
+            }
         }
     }
 
-    private suspend fun executeToolCall(run: AgentRun, config: AgentConfig, call: LlmToolCall) {
-        val stepId = appendStep(run.id, StepKind.ToolCall, call.toolId, call.argsJson ?: "", StepStatus.Running)
-        emitActivity(run.id, OrchestratorActivityEvent.Type.ToolCall, "${call.toolId}: ${(call.argsJson ?: "").take(120)}")
-        try {
-            val result = toolRuntime.call(call.toolId, call.args)
-            when (result) {
-                is ToolResult.Success -> {
-                    updateStep(run.id, stepId, StepStatus.Done, result.message)
-                    emitActivity(run.id, OrchestratorActivityEvent.Type.ToolSuccess, call.toolId)
-                }
-                is ToolResult.Failure -> {
-                    updateStep(run.id, stepId, StepStatus.Failed, result.error)
-                    emitActivity(run.id, OrchestratorActivityEvent.Type.ToolFailure, "${call.toolId}: ${result.error}")
-                }
+    private suspend fun executeWithRetry(runId: String, config: AgentConfig, call: LlmToolCall): ToolExecution {
+        val stepId = appendStep(runId, StepKind.ToolCall, call.toolId, safe(call.argsJson.orEmpty()), StepStatus.Running)
+        emitActivity(runId, OrchestratorActivityEvent.Type.ToolCall, "${call.toolId}: ${safe(call.argsJson.orEmpty())}")
+        val attempts = config.maxRetriesPerAction.coerceIn(0, 5) + 1
+        repeat(attempts) { attempt ->
+            val execution = try {
+                callTool(call.toolId, call.args).toExecution(call.toolId)
+            } catch (ce: CancellationException) {
+                updateStep(runId, stepId, StepStatus.Cancelled, "Cancelled by user")
+                throw ce
+            } catch (e: Exception) {
+                ToolExecution(false, null, "", e.message ?: "tool error", retryable = false)
             }
-        } catch (ce: CancellationException) {
-            updateStep(run.id, stepId, StepStatus.Cancelled, "Cancelled by user")
-            throw ce
-        } catch (e: Exception) {
-            updateStep(run.id, stepId, StepStatus.Failed, e.message ?: e::class.simpleName ?: "error")
-            emitActivity(run.id, OrchestratorActivityEvent.Type.ToolFailure, "${call.toolId}: ${e.message ?: "error"}")
+            if (execution.succeeded) {
+                updateStep(runId, stepId, StepStatus.Done, execution.observation())
+                emitActivity(runId, OrchestratorActivityEvent.Type.ToolSuccess, call.toolId)
+                return execution
+            }
+            if (!execution.retryable || attempt + 1 >= attempts) {
+                updateStep(runId, stepId, StepStatus.Failed, execution.observation())
+                emitActivity(runId, OrchestratorActivityEvent.Type.ToolFailure, "${call.toolId}: ${execution.stderr}")
+                return execution
+            }
+            emitActivity(runId, OrchestratorActivityEvent.Type.Retrying, "${call.toolId} retry ${attempt + 1}/$attempts")
+            delay(recoveryPolicy.delayFor(attempt))
+        }
+        error("unreachable")
+    }
+
+    private fun ToolResult.toExecution(toolId: String): ToolExecution = when (this) {
+        is ToolResult.Failure -> ToolExecution(false, null, "", safe(error), retryable)
+        is ToolResult.Success -> when (val payload = data) {
+            is ExecToolResult -> ToolExecution(payload.exitCode == 0, payload.exitCode, safe(payload.stdout), safe(payload.stderr), false)
+            else -> ToolExecution(true, null, safe(message), "", false, conclusive = toolId != "terminal.exec_stream")
         }
     }
 
-    private fun finishRun(runId: String, status: RunStatus) {
-        _runs.update {
-            val run = it[runId] ?: return@update it
-            it + (runId to run.copy(status = status, finishedAt = currentTime()))
-        }
-        // Browser session cleanup — every terminal state closes the run's session.
-        toolRuntime.browserDispatcher?.let { dispatcher ->
-            scope.launch { dispatcher.cleanupRun(runId) }
-        }
+    private fun RunVerification.observe(call: LlmToolCall, execution: ToolExecution): RunVerification {
+        val test = isTestCall(call)
+        return copy(
+            successfulCommands = successfulCommands + if (execution.succeeded && execution.conclusive) 1 else 0,
+            failedCommands = failedCommands + if (!execution.succeeded) 1 else 0,
+            workspaceMutated = workspaceMutated || isMutation(call),
+            testsAttempted = testsAttempted + if (test) 1 else 0,
+            testsPassed = testsPassed + if (test && execution.succeeded && execution.exitCode == 0) 1 else 0,
+            lastTestPassed = if (test) execution.succeeded && execution.exitCode == 0 else lastTestPassed,
+            diffObserved = when {
+                isMutation(call) && execution.succeeded -> false
+                call.toolId == "git.diff" && execution.succeeded -> true
+                else -> diffObserved
+            },
+            lastExitCode = execution.exitCode ?: lastExitCode,
+            lastStdout = execution.stdout.takeLast(4000),
+            lastStderr = execution.stderr.takeLast(4000),
+        )
     }
 
-    // ---------- Helpers ----------
+    private fun effectiveRisk(call: LlmToolCall): ToolRisk {
+        val static = mapRisk(toolRuntime.riskLevelFor(call.toolId))
+        return ApprovalEngine.classifyCommandRisk(call.toolId, call.argsJson ?: call.args.toString(), static)
+    }
 
-    private fun buildContext(projectContext: String): Map<String, String> =
-        if (projectContext.isBlank()) emptyMap() else mapOf("project" to projectContext)
+    private fun phaseFor(call: LlmToolCall): AgentPhase = when {
+        isTestCall(call) -> AgentPhase.Testing
+        call.toolId == "git.diff" -> AgentPhase.Diffing
+        else -> AgentPhase.Executing
+    }
+
+    private fun isTestCall(call: LlmToolCall): Boolean {
+        if (call.toolId !in setOf("terminal.exec", "terminal.exec_stream")) return false
+        val command = ((call.args["command"] as? String).orEmpty() + " " + call.argsJson.orEmpty()).lowercase()
+        return TEST_PATTERNS.any(command::contains) ||
+            (command.contains("gradlew") && (command.contains("test") || command.contains("check"))) ||
+            (command.contains("npm") && command.contains("test")) ||
+            (command.contains("python") && command.contains("unittest"))
+    }
+
+    private fun applyUsage(runId: String, usage: LlmUsage) = updateRun(runId) {
+        it.copy(
+            totalInputTokens = it.totalInputTokens + usage.inputTokens,
+            totalOutputTokens = it.totalOutputTokens + usage.outputTokens,
+            estimatedCostUsd = it.estimatedCostUsd + usage.estimatedCostUsd,
+        )
+    }
+
+    private fun transition(runId: String, phase: AgentPhase) {
+        updateRun(runId) { it.copy(phase = phase, checkpoint = it.checkpoint.copy(phase = phase, updatedAt = now())) }
+        emitActivity(runId, OrchestratorActivityEvent.Type.PhaseChanged, phase.name, phase)
+    }
+
+    private fun appendStep(runId: String, kind: StepKind, title: String, detail: String, status: StepStatus = StepStatus.Done): String {
+        val timestamp = now()
+        val step = AgentStep(
+            id = newId(), runId = runId, kind = kind, title = title, detail = safe(detail), status = status,
+            startedAt = timestamp,
+            finishedAt = if (status in setOf(StepStatus.Running, StepStatus.WaitingApproval)) null else timestamp,
+        )
+        updateRun(runId) { it.copy(steps = it.steps + step) }
+        return step.id
+    }
+
+    private fun appendFailureStep(runId: String, kind: StepKind, title: String, detail: String) =
+        appendStep(runId, kind, title, detail, StepStatus.Failed)
+
+    private fun updateStep(runId: String, stepId: String, status: StepStatus, summary: String) = updateRun(runId) { run ->
+        val timestamp = now()
+        run.copy(steps = run.steps.map { step ->
+            if (step.id != stepId) step else step.copy(
+                status = status, toolResultSummary = safe(summary),
+                finishedAt = timestamp, durationMs = timestamp - step.startedAt,
+            )
+        })
+    }
+
+    private fun saveCheckpoint(runId: String, checkpoint: AgentCheckpoint) =
+        updateRun(runId) { it.copy(checkpoint = checkpoint, phase = checkpoint.phase) }
+
+    private fun putRun(run: AgentRun) {
+        _runs.update { it + (run.id to run) }
+        persistRuns()
+    }
+
+    private fun updateRun(runId: String, transform: (AgentRun) -> AgentRun) {
+        _runs.update { all -> all[runId]?.let { all + (runId to transform(it)) } ?: all }
+        persistRuns()
+    }
+
+    private fun persistRuns() = runStore.saveRuns(_runs.value.values.sortedBy { it.startedAt })
+    private fun persistPending() = runStore.savePending(_pending.value)
+    private fun removePending(id: String) {
+        _pending.update { it.filterNot { item -> item.id == id } }
+        persistPending()
+    }
+
+    private fun emitActivity(
+        runId: String,
+        type: OrchestratorActivityEvent.Type,
+        detail: String,
+        phase: AgentPhase = _runs.value[runId]?.phase ?: AgentPhase.Request,
+    ) {
+        _activity.tryEmit(OrchestratorActivityEvent(runId, type, safe(detail), phase, now()))
+    }
+
+    private fun currentRun(runId: String): AgentRun = requireNotNull(_runs.value[runId]) { "Unknown run $runId" }
+    private fun isMutation(call: LlmToolCall): Boolean {
+        if (call.toolId in MUTATING_TOOLS) return true
+        if (call.toolId !in setOf("terminal.exec", "terminal.exec_stream")) return false
+        if (isTestCall(call)) return false
+        val command = ((call.args["command"] as? String).orEmpty() + " " + call.argsJson.orEmpty()).lowercase()
+        return MUTATING_COMMAND_PATTERNS.any(command::contains)
+    }
+    private fun isAllowed(config: AgentConfig, toolId: String): Boolean =
+        (config.allowedToolIds.isEmpty() || toolId in config.allowedToolIds) &&
+            toolId !in config.blockedToolIds && toolId in toolRuntime.availableToolIds()
+
+    private fun mapRisk(level: ToolRiskLevel): ToolRisk = when (level) {
+        ToolRiskLevel.READ_ONLY -> ToolRisk.SafeRead
+        ToolRiskLevel.WORKSPACE_WRITE -> ToolRisk.WorkspaceWrite
+        ToolRiskLevel.PACKAGE_INSTALL -> ToolRisk.PackageInstall
+        ToolRiskLevel.NETWORK, ToolRiskLevel.PROCESS_CONTROL -> ToolRisk.Network
+        ToolRiskLevel.GIT_WRITE -> ToolRisk.WorkspaceWrite
+        ToolRiskLevel.SECRET_ACCESS, ToolRiskLevel.DESTRUCTIVE -> ToolRisk.Destructive
+    }
 
     private fun buildSystemPrompt(config: AgentConfig): String = buildString {
         appendLine(config.systemPrompt.ifBlank { SYSTEM_PROMPT })
         appendLine("Available tools: ${toolRuntime.availableToolIds().joinToString(", ")}")
-        appendLine("Risk policy: ${approvalMode().name} — auto-approve per-mode; destructive operations always require approval.")
+        appendLine("Final delivery requires observed tool results, passing tests after writes, and git.diff.")
     }
 
-    private fun isAllowed(config: AgentConfig, toolId: String): Boolean {
-        if (config.allowedToolIds.isNotEmpty() && toolId !in config.allowedToolIds) return false
-        if (toolId in config.blockedToolIds) return false
-        return toolId in toolRuntime.availableToolIds()
+    private fun contextSuffix(context: String) = if (context.isBlank()) "" else "\nProject context:\n$context"
+    private fun checkpointSummary(run: AgentRun) = buildString {
+        appendLine("Resume checkpoint: ${run.checkpoint.phase}; completed steps=${run.checkpoint.completedSteps}.")
+        run.steps.takeLast(20).forEach { appendLine("- ${it.status}: ${it.title}: ${it.toolResultSummary ?: it.detail}") }
+        append("Re-observe the workspace; never assume an interrupted command completed.")
     }
 
-    private fun mapRisk(level: ToolRiskLevel): ToolRisk = when (level) {
-        ToolRiskLevel.READ_ONLY -> ToolRisk.SafeRead
-        ToolRiskLevel.WORKSPACE_WRITE, ToolRiskLevel.PACKAGE_INSTALL -> ToolRisk.LocalWrite
-        ToolRiskLevel.NETWORK, ToolRiskLevel.PROCESS_CONTROL -> ToolRisk.NetworkWrite
-        ToolRiskLevel.GIT_WRITE -> ToolRisk.NetworkWrite
-        ToolRiskLevel.SECRET_ACCESS, ToolRiskLevel.DESTRUCTIVE -> ToolRisk.Dangerous
+    private fun verificationFailure(v: RunVerification): String = when {
+        v.successfulCommands == 0 -> "No successful tool result was observed."
+        v.workspaceMutated && !v.testsProven -> "Workspace changed but no passing test with exitCode=0 was observed."
+        v.workspaceMutated && !v.diffObserved -> "Workspace changed but git.diff was not observed successfully."
+        else -> "Execution evidence is incomplete."
     }
 
-    private fun appendStep(runId: String, kind: StepKind, title: String, detail: String, status: StepStatus = StepStatus.Done): String {
-        val step = AgentStep(id = newId(), runId = runId, kind = kind, title = title, detail = detail, status = status, finishedAt = currentTime())
-        _runs.update {
-            val run = it[runId] ?: return@update it
-            it + (runId to run.copy(steps = run.steps + step))
-        }
-        return step.id
-    }
-
-    private fun updateStep(runId: String, stepId: String, status: StepStatus, resultSummary: String?) {
-        _runs.update {
-            val run = it[runId] ?: return@update it
-            val idx = run.steps.indexOfFirst { it.id == stepId }
-            if (idx == -1) return@update it
-            val old = run.steps[idx]
-            val updated = old.copy(status = status, toolResultSummary = resultSummary, finishedAt = currentTime(), durationMs = currentTime() - old.startedAt)
-            it + (runId to run.copy(steps = run.steps.toMutableList().also { l -> l[idx] = updated }))
-        }
-    }
-
-    private fun appendFailureStep(runId: String, kind: StepKind, title: String, detail: String) {
-        appendStep(runId, kind, title, detail, StepStatus.Failed)
-    }
-
-    private fun emitActivity(runId: String, type: OrchestratorActivityEvent.Type, detail: String) {
-        scope.launch { _activity.emit(OrchestratorActivityEvent(runId, type, detail)) }
-    }
-
-    private fun currentTime(): Long = System.currentTimeMillis()
-    private fun newId(): String = (currentTime().toString(36) + kotlin.random.Random.nextLong().toString(36)).take(12)
-
-    // ---------- LLM delegate (injected; AI Gateway provides the real one) ----------
+    private fun newId(): String = (now().toString(36) + kotlin.random.Random.nextLong().toString(36)).take(12)
+    private fun safe(value: String): String = RuntimeDiagnosticRedactor.redact(value)
 
     interface LlmDelegate {
         suspend fun complete(request: LlmCompletionRequest): LlmCompletionResponse
+        suspend fun completeStreaming(request: LlmCompletionRequest, onDelta: suspend (String) -> Unit): LlmCompletionResponse = complete(request)
     }
 
-    data class LlmCompletionRequest(
-        val messages: List<LlmMessage>,
-        val tools: List<String>,
-    )
-
+    data class LlmCompletionRequest(val messages: List<LlmMessage>, val tools: List<String>)
     data class LlmMessage(val role: String, val content: String)
-
+    data class LlmUsage(val inputTokens: Long = 0, val outputTokens: Long = 0, val estimatedCostUsd: Double = 0.0)
     data class LlmCompletionResponse(
-        /** Final textual answer — no more tool calls. */
         val isFinalAnswer: Boolean,
         val content: String,
         val toolCalls: List<LlmToolCall> = emptyList(),
+        val usage: LlmUsage = LlmUsage(),
     ) {
-        fun toHistoryMessages(): LlmMessage = LlmMessage(
-            role = "assistant",
-            content = if (isFinalAnswer) content else toolCalls.joinToString("\n") { "${it.toolId}: ${it.argsJson ?: ""}" },
-        )
+        fun toHistoryText(): String = if (isFinalAnswer) content else toolCalls.joinToString("\n") { "${it.toolId}: ${it.argsJson.orEmpty()}" }
     }
 
-    data class LlmToolCall(
-        val toolId: String,
-        val args: Map<String, Any?>,
-        val argsJson: String? = null,
-    )
+    data class LlmToolCall(val toolId: String, val args: Map<String, Any?>, val argsJson: String? = null)
 
     companion object {
-        private const val APPROVAL_TIMEOUT_MINUTES = 30
-
         val SYSTEM_PROMPT: String = """
-            You are ${AssistantIdentity.Default.systemIdentity}, running as a developer agent inside Debian 13 Trixie arm64 in Moataz Runtime on the user's Android device.
-            The canonical project root is /workspace.
-            Prefer reading before editing. Break tasks into small verifiable steps: write files, install dependencies,
-            build, run the dev server, and expose its port so the user can preview it. After every command, inspect the
-            output; if a build or test fails, diagnose the error, apply a fix, and retry. When done, summarize what was
-            created, which ports are exposed, and what the user can preview.
+            You are ${AssistantIdentity.Default.systemIdentity}, a supervised developer agent in Moataz Runtime.
+            The canonical project root is /workspace. Plan before acting and inspect stdout, stderr and exit codes.
+            After edits, run relevant tests and inspect git diff. On failure, diagnose observed output, repair, and retest.
+            Never claim success based on prose or an unobserved command.
         """.trimIndent()
+        private val ACTIVE_STATUSES = setOf(RunStatus.Queued, RunStatus.Running, RunStatus.WaitingApproval)
+        private val TERMINAL_STATUSES = setOf(RunStatus.Completed, RunStatus.Failed, RunStatus.Cancelled)
+        private val MUTATING_TOOLS = setOf("fs.write", "fs.patch", "fs.move", "fs.delete", "git.checkout", "git.commit")
+        private val MUTATING_COMMAND_PATTERNS = listOf(" >", "> ", "sed -i", "rm ", "mv ", "cp ", "touch ", "mkdir ", "git checkout", "git commit")
+        private val TEST_PATTERNS = listOf("gradlew test", "gradle test", "npm test", "pnpm test", "yarn test", "pytest", "python -m unittest", "cargo test", "mvn test")
     }
 }
 
-/** Recovery policy — how many failures before the run gives up. */
-data class RecoveryPolicy(
-    val maxConsecutiveFailures: Int = 3,
-    val retryDelay: Duration = 2.minutes,
+private data class ToolExecution(
+    val succeeded: Boolean,
+    val exitCode: Int?,
+    val stdout: String,
+    val stderr: String,
+    val retryable: Boolean,
+    val conclusive: Boolean = true,
 ) {
-    fun isRetriableLlmError(e: Exception): Boolean =
-        e.message?.contains("rate", ignoreCase = true) == true ||
-            e.message?.contains("timeout", ignoreCase = true) == true
-
-    companion object {
-        val DEFAULT = RecoveryPolicy()
+    fun observation(): String = buildString {
+        append("success=$succeeded")
+        if (!conclusive) append(" completed=false")
+        exitCode?.let { append(" exitCode=$it") }
+        if (stdout.isNotBlank()) append("\nstdout:\n${stdout.takeLast(4000)}")
+        if (stderr.isNotBlank()) append("\nstderr:\n${stderr.takeLast(4000)}")
     }
 }
 
-/** Activity timeline event emitted by the orchestrator. */
+data class RecoveryPolicy(val maxConsecutiveFailures: Int = 3, val retryDelay: Duration = 2.seconds) {
+    fun isRetriableLlmError(e: Exception): Boolean =
+        listOf("rate", "timeout", "temporar", "unavailable", "429", "502", "503", "504")
+            .any { e.message.orEmpty().contains(it, ignoreCase = true) }
+    fun delayFor(attempt: Int): Duration = retryDelay * min(1 shl attempt.coerceIn(0, 6), 64)
+    companion object { val DEFAULT = RecoveryPolicy() }
+}
+
 data class OrchestratorActivityEvent(
     val runId: String,
     val type: Type,
     val detail: String,
+    val phase: AgentPhase = AgentPhase.Request,
+    val timestamp: Long = System.currentTimeMillis(),
 ) {
     enum class Type {
-        Started,
-        LlmError,
-        WaitingApproval,
-        Blocked,
-        ToolCall,
-        ToolSuccess,
-        ToolFailure,
-        BudgetExhausted,
-        Finished,
+        Started, Resumed, PhaseChanged, ModelDelta, LlmError, WaitingApproval, Blocked,
+        ToolCall, ToolSuccess, ToolFailure, Observation, Retrying, LoopDetected,
+        VerificationFailed, BudgetExhausted, Finished,
     }
 }
 
-/** Exposed tool set for the LLM (kept simple — full function schemas live in a later phase). */
 fun ToolRuntime.availableToolIds(): List<String> = listOf(
     "terminal.exec", "terminal.exec_stream", "terminal.input", "terminal.cancel",
     "fs.list", "fs.read", "fs.write", "fs.patch", "fs.move", "fs.delete", "fs.search",
     "git.status", "git.diff", "git.log", "git.branch", "git.checkout", "git.commit",
-    "process.list", "process.kill",
-    "port.open", "port.close", "preview.open",
-    "sandbox.info", "sandbox.snapshot",
-    "browser.open", "browser.read", "browser.click", "browser.type",
-    "browser.back", "browser.extract", "browser.close",
-    "analyze_file",
+    "process.list", "process.kill", "port.open", "port.close", "preview.open",
+    "sandbox.info", "sandbox.snapshot", "browser.open", "browser.read", "browser.click",
+    "browser.type", "browser.back", "browser.extract", "browser.close", "analyze_file",
 )
+
+private fun RunStatus.toTerminalPhase(current: AgentPhase): AgentPhase = when (this) {
+    RunStatus.Completed -> AgentPhase.Completed
+    RunStatus.Failed -> AgentPhase.Failed
+    RunStatus.Cancelled -> AgentPhase.Cancelled
+    else -> current
+}
