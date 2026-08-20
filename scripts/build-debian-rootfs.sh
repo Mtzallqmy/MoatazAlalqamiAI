@@ -13,7 +13,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT="${1:-$ROOT/androidApp/src/main/assets/moataz-debian-rootfs-arm64-v13.tar.xz}"
-IMAGE="${DEBIAN_IMAGE:-debian:13-slim}"
+# Date-pinned official Debian 13.6/Trixie image. Override deliberately with
+# DEBIAN_IMAGE when refreshing the production base.
+IMAGE="${DEBIAN_IMAGE:-debian:trixie-20260803-slim}"
 OPENCODE_VERSION="${OPENCODE_VERSION:-1.18.14}"
 CONTAINER="kai-debian13-arm64-${RANDOM}-$$"
 TMP_OUTPUT="${OUTPUT}.tmp"
@@ -49,6 +51,7 @@ docker create \
 
     mkdir -p \
       /root/projects \
+      /workspace \
       /root/.local/bin \
       /root/.opencode/bin \
       /root/.grok/bin \
