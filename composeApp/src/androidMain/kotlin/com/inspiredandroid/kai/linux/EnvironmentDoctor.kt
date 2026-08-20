@@ -79,6 +79,17 @@ class EnvironmentDoctor(
             timeoutSeconds = 20,
         )
         if (!pty.success) issues += EnvironmentIssue.PtyUnavailable(pty.failureDetail())
+
+        val opencode = launcher.probe(
+            stage = "embedded_opencode",
+            command = "command -v opencode >/dev/null 2>&1 && opencode --version >/dev/null 2>&1",
+            timeoutSeconds = 30,
+        )
+        if (!opencode.success) {
+            issues += EnvironmentIssue.AgentBinaryBroken(
+                opencode.failureDetail().ifBlank { "Embedded OpenCode is missing or cannot execute" },
+            )
+        }
         return EnvironmentHealth(issues)
     }
 

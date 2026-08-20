@@ -34,7 +34,6 @@ import kai.composeapp.generated.resources.settings_sandbox_cancel
 import kai.composeapp.generated.resources.settings_sandbox_description
 import kai.composeapp.generated.resources.settings_sandbox_disk_usage
 import kai.composeapp.generated.resources.settings_sandbox_distro_alpine
-import kai.composeapp.generated.resources.settings_sandbox_distro_alpine_detail
 import kai.composeapp.generated.resources.settings_sandbox_distro_alpine_installed
 import kai.composeapp.generated.resources.settings_sandbox_distro_debian
 import kai.composeapp.generated.resources.settings_sandbox_distro_debian_detail
@@ -239,28 +238,27 @@ private fun DistroPicker(
             selected = selected == LinuxDistro.DEBIAN,
             onSelect = onSelect,
         )
-        DistroOption(
-            distro = LinuxDistro.ALPINE,
-            title = stringResource(Res.string.settings_sandbox_distro_alpine),
-            detail = if (LinuxDistro.ALPINE in installed) {
-                stringResource(Res.string.settings_sandbox_distro_alpine_installed)
-            } else {
-                stringResource(Res.string.settings_sandbox_distro_alpine_detail)
-            },
-            selected = selected == LinuxDistro.ALPINE,
-            onSelect = onSelect,
-        )
-        DistroOption(
-            distro = LinuxDistro.UBUNTU,
-            title = "Ubuntu 26.04 LTS (resolute)",
-            detail = if (LinuxDistro.UBUNTU in installed) {
-                "Installed with OpenCode agent built in"
-            } else {
-                "Default agentic environment — Ubuntu LTS + build tools + embedded OpenCode agent"
-            },
-            selected = selected == LinuxDistro.UBUNTU,
-            onSelect = onSelect,
-        )
+        // Compatibility runtimes are switchable only when an upgrade already
+        // has them on disk. Fresh installs expose the single production Debian
+        // contract and cannot accidentally enter the old Alpine/Ubuntu flows.
+        if (LinuxDistro.ALPINE in installed) {
+            DistroOption(
+                distro = LinuxDistro.ALPINE,
+                title = stringResource(Res.string.settings_sandbox_distro_alpine),
+                detail = stringResource(Res.string.settings_sandbox_distro_alpine_installed),
+                selected = selected == LinuxDistro.ALPINE,
+                onSelect = onSelect,
+            )
+        }
+        if (LinuxDistro.UBUNTU in installed) {
+            DistroOption(
+                distro = LinuxDistro.UBUNTU,
+                title = "Ubuntu 26.04 LTS (experimental)",
+                detail = "Experimental compatibility runtime installed",
+                selected = selected == LinuxDistro.UBUNTU,
+                onSelect = onSelect,
+            )
+        }
     }
 }
 

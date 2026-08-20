@@ -450,7 +450,7 @@
     <string name="kai_build_exit_content_description">Exit build environment</string>
     <string name="kai_build_back_content_description">Back to projects</string>
     <string name="kai_build_setup_title">Set up Linux (Beta)</string>
-    <string name="kai_build_setup_description">The Linux build environment is in beta. Debian Trixie runs under proot inside this app, with curl, git, wget, python3, and other essentials included. The first install downloads about 100 MB and needs network access.</string>
+    <string name="kai_build_setup_description">Moataz Runtime includes Debian 13, core developer tools, and OpenCode inside the app. Setup verifies and extracts the embedded runtime; network is only needed later for online services or updates.</string>
     <string name="kai_build_setup_agents_title">Coding agents</string>
     <string name="kai_build_setup_agents_description">Pick the CLIs to install on the fresh system. You can add the others later.</string>
     <string name="kai_build_setup_install">Install Debian</string>

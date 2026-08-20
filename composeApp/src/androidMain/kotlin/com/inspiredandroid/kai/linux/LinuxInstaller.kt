@@ -39,8 +39,8 @@ private const val EMBEDDED_ROOTFS_MANIFEST = "moataz-debian-rootfs-arm64.manifes
  * both drive this; whoever gets there first produces the install the other one
  * then finds already present.
  *
- * When the device is arm64 and the APK bundles a matching verified rootfs, the
- * rootfs download is skipped; package setup may still require network access.
+ * When the device is arm64 and the APK bundles the matching verified Debian
+ * rootfs, both the rootfs download and base-package network setup are skipped.
  */
 class LinuxInstaller(
     private val paths: LinuxPaths,
@@ -132,9 +132,9 @@ class LinuxInstaller(
      * and the network download path should be used instead.
      */
     private fun copyEmbeddedAsset(spec: DistroSpec, target: File): Boolean {
-        if (!spec.arch().equals("arm64", ignoreCase = true)) return false
+        if (spec.distro != LinuxDistro.DEBIAN || !spec.arch().equals("arm64", ignoreCase = true)) return false
         val assetList = appContext.assets.list("") ?: emptyArray()
-        if (EMBEDDED_ROOTFS_ASSET !in assetList || EMBEDDED_ROOTFS_MANIFEST !in assetList) return false
+        if (EMBEDDED_ROOTFS_MANIFEST !in assetList) return false
         val manifest = runCatching {
             appContext.assets.open(EMBEDDED_ROOTFS_MANIFEST).bufferedReader().use {
                 Json { ignoreUnknownKeys = false }.decodeFromString<RootfsManifest>(it.readText())
@@ -144,12 +144,29 @@ class LinuxInstaller(
         // architecture is not a production Moataz Runtime image.
         if (!manifest.isProductionRuntime()) return false
         target.parentFile?.mkdirs()
-        appContext.assets.open(EMBEDDED_ROOTFS_ASSET).use { input ->
-            FileOutputStream(target).use { output ->
-                val buffer = ByteArray(64 * 1024)
-                var bytesRead: Int
-                while (input.read(buffer).also { bytesRead = it } != -1) {
-                    output.write(buffer, 0, bytesRead)
+        FileOutputStream(target).use { output ->
+            if (manifest.assetParts.isEmpty()) {
+                if (EMBEDDED_ROOTFS_ASSET !in assetList) return false
+                appContext.assets.open(EMBEDDED_ROOTFS_ASSET).use { input ->
+                    input.copyTo(output, 64 * 1024)
+                }
+            } else {
+                manifest.assetParts.forEach { part ->
+                    check(part.name in assetList) { "Embedded rootfs part is missing: ${part.name}" }
+                    val digest = MessageDigest.getInstance("SHA-256")
+                    var size = 0L
+                    appContext.assets.open(part.name).use { input ->
+                        val buffer = ByteArray(64 * 1024)
+                        var bytesRead: Int
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            output.write(buffer, 0, bytesRead)
+                            digest.update(buffer, 0, bytesRead)
+                            size += bytesRead
+                        }
+                    }
+                    val partSha = digest.digest().joinToString("") { "%02x".format(it) }
+                    check(size == part.sizeBytes) { "Embedded rootfs part size mismatch: ${part.name}" }
+                    check(partSha == part.sha256) { "Embedded rootfs part SHA-256 mismatch: ${part.name}" }
                 }
             }
         }
@@ -251,7 +268,7 @@ class LinuxInstaller(
         // way its dependency solver sees the full picture.
         onStep(InstallStep.Packages(distro.basePackages))
         val result = launcher.execute(
-            manager.installCommand(distro.basePackages.joinToString(" ")),
+            manager.installCommand(distro.basePackages),
             timeoutSeconds = PACKAGE_TIMEOUT_SECONDS,
         )
         check(result.success) { "Failed to install base packages: ${result.failureDetail()}" }

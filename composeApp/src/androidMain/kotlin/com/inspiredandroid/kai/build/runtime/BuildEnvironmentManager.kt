@@ -592,9 +592,11 @@ class BuildEnvironmentManager(
             onEnvironmentChanged?.invoke()
         }
 
-        // Third-party developer CLIs are opt-in; none is silently installed with
-        // the runtime. Definitions and installers live in the generic registry.
-        val allAgentIds = agentIds.mapNotNull { BuildAgents.get(it) }
+        // OpenCode ships inside Moataz Runtime and is always probed. Keeping it
+        // in this list makes older compatible images self-repair; the current
+        // embedded image takes the already-installed fast path without network.
+        val allAgentIds = (BuildAgents.autoInstallAgents + agentIds.mapNotNull { BuildAgents.get(it) })
+            .distinctBy { it.id }
         val failed = mutableListOf<String>()
         for (agent in allAgentIds) {
             if (!isActive()) throw CancellationException()
