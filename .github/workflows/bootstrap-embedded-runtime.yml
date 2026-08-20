@@ -24,6 +24,7 @@ jobs:
           test -x /usr/bin/qemu-aarch64-static
       - name: Build and probe Debian 13 with OpenCode
         env:
+          # Pinned and verified against the release asset digest by the builder.
           OPENCODE_VERSION: 1.18.19
         run: scripts/build_embedded_runtime.sh
       - name: Publish generated runtime parts

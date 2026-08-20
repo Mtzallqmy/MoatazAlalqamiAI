@@ -39,6 +39,12 @@ sudo mount -t proc proc "$rootfs/proc"
 sudo mount --bind /dev "$rootfs/dev"
 sudo mount --bind /dev/pts "$rootfs/dev/pts"
 sudo install -m 0755 /usr/bin/qemu-aarch64-static "$rootfs/usr/bin/qemu-aarch64-static"
+# Linux container images commonly make this an absolute symlink. Following it
+# from the host can resolve back to the host file and make cp reject a same-file
+# copy, so replace the guest link with an ordinary runtime-local file.
+if [[ -e "$rootfs/etc/resolv.conf" || -L "$rootfs/etc/resolv.conf" ]]; then
+  sudo unlink "$rootfs/etc/resolv.conf"
+fi
 sudo cp /etc/resolv.conf "$rootfs/etc/resolv.conf"
 printf '#!/bin/sh\nexit 101\n' | sudo tee "$rootfs/usr/sbin/policy-rc.d" >/dev/null
 sudo chmod 0755 "$rootfs/usr/sbin/policy-rc.d"
