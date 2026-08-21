@@ -94,9 +94,20 @@ class RemoteManifestTest {
     @Test
     fun `manifest payload is the same validated remote config`() {
         val payload = plainConfigJson()
-        val envelope = """{"format":"ma-remote-manifest-v1","timestamp_epoch":1724000000,"payload":"${Base64.UrlSafe.encode(payload.toByteArray())}","algorithm":"ed25519","signature":null}"""
-        val direct = RemoteConfigDefaults // no-op
-        val fromEnvelope = RemoteManifestVerifier.verify(envelope, ManifestVerifyMode.LAX).getOrNull()!!
-        assertEquals(payload, json.encodeToString(RemoteConfig.serializer(), fromEnvelope))
+        val keyPair = java.security.KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        val signer = java.security.Signature.getInstance("Ed25519").apply {
+            initSign(keyPair.private)
+            update(payload.encodeToByteArray())
+        }
+        val envelope = """{"format":"ma-remote-manifest-v1","timestamp_epoch":1724000000,"payload":"${Base64.UrlSafe.encode(payload.toByteArray())}","algorithm":"ed25519","signature":"${Base64.UrlSafe.encode(signer.sign())}"}"""
+        val publicKeyHex = keyPair.public.encoded.joinToString("") { "%02x".format(it) }
+
+        RemoteManifestVerifier.pinPublicKeyHex(publicKeyHex)
+        try {
+            val fromEnvelope = RemoteManifestVerifier.verify(envelope).getOrThrow()
+            assertEquals(payload, json.encodeToString(RemoteConfig.serializer(), fromEnvelope))
+        } finally {
+            RemoteManifestVerifier.pinPublicKeyHex("")
+        }
     }
 }
