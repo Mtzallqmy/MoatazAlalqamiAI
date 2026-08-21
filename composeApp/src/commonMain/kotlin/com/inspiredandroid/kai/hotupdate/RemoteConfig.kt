@@ -146,20 +146,9 @@ open class RemoteConfigService(
             return@runCatching null
         }
         val rawBody = response.bodyAsText()
-        // Signed manifest envelope takes precedence when present: the payload
-        // inside is the same RemoteConfig document, authenticated via
-        // RemoteManifestVerifier before validation runs.
-        val manifestConfig = tryManifestFirst(rawBody)
-        if (manifestConfig != null) return@runCatching manifestConfig
-        json.decodeFromString(RemoteConfig.serializer(), rawBody)
-    }.getOrNull()
-
-    /**
-     * Tries to interpret [raw] as a signed manifest envelope; returns the
-     * verified config when the envelope is authentic, null otherwise.
-     */
-    private fun tryManifestFirst(raw: String): RemoteConfig? = runCatching {
-        RemoteManifestVerifier.verify(raw).getOrNull()
+        // Remote configuration is executable policy. It must never fall back
+        // to parsing an unsigned document when envelope verification fails.
+        RemoteManifestVerifier.verify(rawBody).getOrNull()
     }.getOrNull()
 
     // ---------- Read surface ----------

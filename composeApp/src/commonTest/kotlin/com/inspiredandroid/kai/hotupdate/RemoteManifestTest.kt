@@ -10,8 +10,8 @@ import kotlin.test.assertTrue
 
 /**
  * Security tests for the signed remote manifest envelope. Verifies that
- * untrusted documents are rejected while the legacy unsigned document still
- * works during the transition period.
+ * untrusted documents are rejected while an explicit migration-only LAX mode
+ * remains available for legacy local data.
  */
 class RemoteManifestTest {
 
@@ -39,8 +39,8 @@ class RemoteManifestTest {
     }
 
     @Test
-    fun `legacy unsigned document is still accepted in lax mode`() {
-        val result = RemoteManifestVerifier.verify(plainConfigJson())
+    fun `legacy unsigned document is accepted only in explicit lax mode`() {
+        val result = RemoteManifestVerifier.verify(plainConfigJson(), ManifestVerifyMode.LAX)
         assertTrue(result.isSuccess)
         val config = result.getOrNull()!!
         assertEquals(true, config.feature_flags["AGENT_CHAT_ATTACHMENTS"])
@@ -60,10 +60,7 @@ class RemoteManifestTest {
     fun `manifest with garbage signature is rejected`() {
         val payloadB64 = Base64.UrlSafe.encode(plainConfigJson().toByteArray())
         val envelope = """{"format":"ma-remote-manifest-v1","timestamp_epoch":1724000000,"payload":"$payloadB64","algorithm":"ed25519","signature":"${Base64.UrlSafe.encode("not-a-real-signature".toByteArray())}"}"""
-        // No key pinned: present-but-unverifiable signature is tolerated as
-        // pre-pinning (fail-open until the owner pins a key); pinning any key
-        // makes it a hard failure.
-        assertTrue(RemoteManifestVerifier.verify(envelope).isSuccess)
+        assertTrue(RemoteManifestVerifier.verify(envelope).isFailure)
         RemoteManifestVerifier.pinPublicKeyHex("a".repeat(64))
         try {
             assertTrue(RemoteManifestVerifier.verify(envelope).isFailure)
@@ -80,16 +77,37 @@ class RemoteManifestTest {
 
     @Test
     fun `strict mode rejects unsigned document`() {
-        assertTrue(RemoteManifestVerifier.verify(plainConfigJson(), ManifestVerifyMode.STRICT).isFailure)
+        assertTrue(RemoteManifestVerifier.verify(plainConfigJson()).isFailure)
+    }
+
+    @OptIn(ExperimentalEncodingApi::class)
+    @Test
+    fun `default mode rejects signature when no key is pinned`() {
+        val payloadB64 = Base64.UrlSafe.encode(plainConfigJson().toByteArray())
+        val signatureB64 = Base64.UrlSafe.encode("present-but-unverifiable".toByteArray())
+        val envelope = """{"format":"ma-remote-manifest-v1","payload":"$payloadB64","signature":"$signatureB64"}"""
+        RemoteManifestVerifier.pinPublicKeyHex("")
+        assertTrue(RemoteManifestVerifier.verify(envelope).isFailure)
     }
 
     @OptIn(ExperimentalEncodingApi::class)
     @Test
     fun `manifest payload is the same validated remote config`() {
         val payload = plainConfigJson()
-        val envelope = """{"format":"ma-remote-manifest-v1","timestamp_epoch":1724000000,"payload":"${Base64.UrlSafe.encode(payload.toByteArray())}","algorithm":"ed25519","signature":null}"""
-        val direct = RemoteConfigDefaults // no-op
-        val fromEnvelope = RemoteManifestVerifier.verify(envelope).getOrNull()!!
-        assertEquals(payload, json.encodeToString(RemoteConfig.serializer(), fromEnvelope))
+        val keyPair = java.security.KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        val signer = java.security.Signature.getInstance("Ed25519").apply {
+            initSign(keyPair.private)
+            update(payload.encodeToByteArray())
+        }
+        val envelope = """{"format":"ma-remote-manifest-v1","timestamp_epoch":1724000000,"payload":"${Base64.UrlSafe.encode(payload.toByteArray())}","algorithm":"ed25519","signature":"${Base64.UrlSafe.encode(signer.sign())}"}"""
+        val publicKeyHex = keyPair.public.encoded.joinToString("") { "%02x".format(it) }
+
+        RemoteManifestVerifier.pinPublicKeyHex(publicKeyHex)
+        try {
+            val fromEnvelope = RemoteManifestVerifier.verify(envelope).getOrThrow()
+            assertEquals(payload, json.encodeToString(RemoteConfig.serializer(), fromEnvelope))
+        } finally {
+            RemoteManifestVerifier.pinPublicKeyHex("")
+        }
     }
 }

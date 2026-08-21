@@ -73,6 +73,7 @@ class DynamicToolExecutorTest {
             toolsProvider = { emptyList() },
             dynamicToolProvider = { listOf(echoTool) },
             dynamicExecutor = { DynamicToolExecutor(appSettings, chatExecutor) },
+            dynamicToolsEnabled = { true },
         )
         val result = toolExecutor.executeTool("custom.echo", """{"text":"via executor"}""")
         assertTrue(result.contains("via executor"), "expected routed result in: $result")
@@ -85,6 +86,7 @@ class DynamicToolExecutorTest {
             toolsProvider = { emptyList() },
             dynamicToolProvider = { listOf(delegateTool) },
             dynamicExecutor = { DynamicToolExecutor(appSettings, chatExecutor) },
+            dynamicToolsEnabled = { true },
         )
         // fs.read is not in the empty provider, so the delegate path should
         // surface the built-in executor's own "unknown tool" failure rather
@@ -119,9 +121,23 @@ class DynamicToolExecutorTest {
             toolsProvider = { emptyList() },
             dynamicToolProvider = { validated.dynamic_tools },
             dynamicExecutor = { DynamicToolExecutor(appSettings, chatExecutor) },
+            dynamicToolsEnabled = { true },
         )
         val result = toolExecutor.executeTool("custom.echo", """{"text":"round trip"}""")
         assertTrue(result.contains("round trip"), "expected routed result in: $result")
+    }
+
+    @Test
+    fun `dynamic tool definitions cannot execute while feature gate is off`() = runBlocking {
+        val chatExecutor = ToolExecutor(toolsProvider = { emptyList() })
+        val toolExecutor = ToolExecutor(
+            toolsProvider = { emptyList() },
+            dynamicToolProvider = { listOf(echoTool) },
+            dynamicExecutor = { DynamicToolExecutor(appSettings, chatExecutor) },
+            dynamicToolsEnabled = { false },
+        )
+        val result = toolExecutor.executeTool("custom.echo", """{"text":"must not run"}""")
+        assertTrue(result.contains("Unknown tool"), "expected fail-closed gate in: $result")
     }
 
     @Test

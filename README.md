@@ -44,6 +44,8 @@ LiteRT لتشغيل نماذج GGUF/ONNX على الجهاز بدون إنترن
 - Ready لا تُعرض إلا بعد فحص PRoot وshell وCLI والملفات وPTY.
 - Runtime diagnostics قابلة للنسخ مع إخفاء الأسرار وتسجيل زمن التثبيت وبدء shell.
 - Moataz Terminal تحتفظ بمحرك PTY/VT الحقيقي، وCLI Registry يفصل Claude Code وOpenCode وGrok عن terminal core.
+- **Full/Offline** يضم Runtime داخل APK، بينما **Lite** لا يضم rootfs ويقبل فقط Runtime موقّعًا ومتوافقًا من مصدر HTTPS موثوق.
+- تحديث Runtime مستقل عن APK يستخدم staged rollout وعقد A/B؛ التفعيل الفعلي يبقى خلف feature flag حتى اكتمال device validation.
 
 ---
 
@@ -61,6 +63,7 @@ composeApp/
     data/         — Settings, Services, Models, RemoteRepository
     ui/           — Screens (Kotlin Compose Multiplatform)
 androidApp/       — Android glue: Application, Activities, Resources
+sandbox-gateway/  — Ktor experimental tenant-scoped Remote Runtime gateway
 ```
 
 | المكون | الوصف |
@@ -78,20 +81,22 @@ androidApp/       — Android glue: Application, Activities, Resources
 
 ```bash
 # متطلبات: JDK 21، Android SDK 37، NDK
-./gradlew :androidApp:assembleFossDebug     # APK بدون خدمات Google
-./gradlew :androidApp:assemblePlayStoreDebug
+./gradlew :androidApp:assembleFossFullDebug # Full/Offline مع Debian
+./gradlew :androidApp:assembleFossLiteDebug # Lite بدون rootfs
 ./gradlew :composeApp:testAndroid           # 450+ اختبار وحدة
+./gradlew :sandbox-gateway:test             # عقد Remote Runtime التجريبي
 ```
 
-APK الناتج: `androidApp/build/outputs/apk/foss/debug/androidApp-foss-debug.apk`
+تبقى `assembleFossDebug` و`assembleFossRelease` كواجهات توافقية لمسار Full.
 
 ## CI
 
 يفحص GitHub Actions (`.github/workflows/build.yml`) أجزاء rootfs و17 CLI،
-ويشغّل `testAndroid` ثم يبني Foss Debug وFoss Release. يتحقق بعدها من
+ويشغّل اختبارات Android وSandbox Gateway ثم يبني Full وLite بنوعي Debug وRelease.
+يتحقق من أن rootfs موجودة في Full وغائبة عن Lite، ومن
 `applicationId=com.inspiredandroid.kai` و`versionCode` ومكتبات arm64 فقط،
 ويفشل إذا كان Release APK غير موقّع أو يحمل شهادة Android Debug. يستخدم CI
-شهادة مؤقتة للتحقق ولا يرفعها كـartifact.
+شهادة مؤقتة للتحقق ولا يرفعها كهوية إصدار إنتاجية.
 
 ## الوثائق
 
@@ -106,6 +111,12 @@ APK الناتج: `androidApp/build/outputs/apk/foss/debug/androidApp-foss-debug
 | `docs/SECURITY.md` | نموذج التهديدات وقرارات الأمان |
 | `docs/AGENT_WORKFLOW.md` | دورة الوكيل، أدلة الإنجاز وحدود الموافقة |
 | `docs/WORKSPACE_ARCHITECTURE.md` | الاستيراد وGit والبناء وsnapshot/undo |
+| `docs/EXTENSION_ARCHITECTURE.md` | manifests والصلاحيات والتثبيت والrollback |
+| `docs/THREAT_MODEL.md` | حدود الثقة وبوابات Beta/Production |
+| `docs/RELEASE_ROLLBACK.md` | فصل الإصدارات وFull/Lite وA/B rollout |
+| `docs/DEVICE_TEST_MATRIX.md` | مصفوفة ARM64 والترقية والانقطاع والمساحة |
+| `docs/OBSERVABILITY.md` | قياسات اختيارية مع zero-network عند التعطيل |
+| `docs/DISASTER_RECOVERY.md` | النسخ والاستعادة والاستجابة للحوادث |
 | `docs/PRIVACY.md` | سياسة الخصوصية وبيانات المستخدم |
 | `LEGAL_COMPLIANCE.md` | الترخيص وأصل المشروع |
 

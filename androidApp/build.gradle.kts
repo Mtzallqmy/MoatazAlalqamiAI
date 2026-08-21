@@ -29,7 +29,7 @@ android {
         versionName = libs.versions.appVersion.get()
     }
 
-    flavorDimensions += "distribution"
+    flavorDimensions += listOf("distribution", "runtimePackaging")
     productFlavors {
         create("playStore") {
             dimension = "distribution"
@@ -37,6 +37,15 @@ android {
         create("foss") {
             dimension = "distribution"
             isDefault = true
+        }
+        create("full") {
+            dimension = "runtimePackaging"
+            isDefault = true
+            buildConfigField("String", "MOATAZ_RUNTIME_PACKAGING", "\"full\"")
+        }
+        create("lite") {
+            dimension = "runtimePackaging"
+            buildConfigField("String", "MOATAZ_RUNTIME_PACKAGING", "\"lite\"")
         }
     }
 
@@ -89,6 +98,21 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
+    }
+}
+
+// Compatibility aliases: adding the runtimePackaging dimension must not break
+// release scripts that still invoke the original Foss task names. The aliases
+// deliberately resolve to Full/Offline; Lite is always requested explicitly.
+afterEvaluate {
+    mapOf(
+        "assembleFossDebug" to "assembleFossFullDebug",
+        "assembleFossRelease" to "assembleFossFullRelease",
+    ).forEach { (alias, target) ->
+        val aliasTask = tasks.findByName(alias) ?: tasks.create(alias)
+        aliasTask.group = "build"
+        aliasTask.description = "Compatibility alias for $target"
+        aliasTask.dependsOn(target)
     }
 }
 
