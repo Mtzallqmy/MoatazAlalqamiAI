@@ -14,8 +14,8 @@
  *   }
  *
  * Verification rules (fail-closed):
- * - A manifest missing a signature is accepted ONLY if verifyMode is LAX
- *   (transition period before the owner publishes the public key).
+ * - Production callers use STRICT by default: a signature and pinned public
+ *   key are both mandatory.
  * - An invalid signature always rejects the document; the cached config
  *   is kept untouched rather than rolled back to a forged update.
  * - The public key ships embedded in the APK (build time), so an attacker
@@ -41,10 +41,8 @@ data class RemoteManifest(
 )
 
 /**
- * How strictly incoming manifests must be verified. PROD deployment should
- * move to STRICT once the maintainer publishes a public key via the settings
- * endpoint; LAX is the safe default until then (unsigned documents are
- * treated as pre-key transition documents, never elevated).
+ * How strictly incoming manifests must be verified. [LAX] remains solely for
+ * explicit legacy migrations; remote production entry points never request it.
  */
 enum class ManifestVerifyMode { LAX, STRICT }
 
@@ -72,9 +70,9 @@ object RemoteManifestVerifier {
         pinnedKeyHex = hex.trim().lowercase()
     }
 
-    /** Decode the envelope and, when a key is pinned, verify the signature. */
+    /** Decode the envelope and verify its signature. */
     @OptIn(ExperimentalEncodingApi::class)
-    fun verify(raw: String, mode: ManifestVerifyMode = ManifestVerifyMode.LAX): Result<RemoteConfig> = runCatching {
+    fun verify(raw: String, mode: ManifestVerifyMode = ManifestVerifyMode.STRICT): Result<RemoteConfig> = runCatching {
         val document = json.parseToJsonElement(raw).jsonObject
         val format = document["format"]?.jsonPrimitive?.content
         // A bare RemoteConfig document (no envelope) is the legacy path the
@@ -96,11 +94,7 @@ object RemoteManifestVerifier {
                 // No signature at all: LAX tolerates it, STRICT refuses.
                 if (mode == ManifestVerifyMode.STRICT) error("unsigned manifest rejected in STRICT mode")
             }
-            key.isEmpty() -> {
-                // Key not pinned yet — signature present but unverifiable;
-                // fall back to payload-only acceptance (still authenticated
-                // transit integrity is best-effort until pinning).
-            }
+            key.isEmpty() -> error("manifest public key is not pinned")
             else -> {
                 val signatureBytes = Base64.UrlSafe.decode(signatureB64)
                 require(ed25519Verify(key, payloadBytes, signatureBytes)) {
@@ -118,7 +112,7 @@ object RemoteManifestVerifier {
      * for caller-side deserialization. Unlike [verify], unsigned bare
      * documents are never accepted — catalogs must always travel signed.
      */
-    fun verifyCatalogPayload(raw: String, mode: ManifestVerifyMode = ManifestVerifyMode.LAX): Result<String> = runCatching {
+    fun verifyCatalogPayload(raw: String, mode: ManifestVerifyMode = ManifestVerifyMode.STRICT): Result<String> = runCatching {
         val document = json.parseToJsonElement(raw).jsonObject
         val format = document["format"]?.jsonPrimitive?.content
         require(format == "ma-remote-manifest-v1") { "catalog envelope missing or malformed format" }
@@ -131,7 +125,7 @@ object RemoteManifestVerifier {
                 if (mode == ManifestVerifyMode.STRICT) error("unsigned catalog manifest rejected in STRICT mode")
                 if (key.isNotEmpty()) error("catalog manifest lacks signature while key is pinned")
             }
-            key.isEmpty() -> { /* key not pinned yet — best-effort until pinning */ }
+            key.isEmpty() -> error("catalog public key is not pinned")
             else -> {
                 val signatureBytes = Base64.UrlSafe.decode(signatureB64)
                 require(ed25519Verify(key, payloadBytes, signatureBytes)) {

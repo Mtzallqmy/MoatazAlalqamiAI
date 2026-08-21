@@ -31,6 +31,8 @@ class ToolExecutor(
     private val dynamicToolProvider: () -> List<com.inspiredandroid.kai.hotupdate.RemoteToolDefinition> = { emptyList() },
     /** Executes remotely-delivered tools onto built-in executors. */
     private val dynamicExecutor: (() -> com.inspiredandroid.kai.hotupdate.DynamicToolExecutor)? = null,
+    /** Fail-closed runtime gate; definitions alone never authorize execution. */
+    private val dynamicToolsEnabled: () -> Boolean = { false },
 ) {
 
     private val jsonParser = Json { ignoreUnknownKeys = true }
@@ -45,7 +47,7 @@ class ToolExecutor(
             // Dynamic tools shipped through the remote config: schema + routing
             // arrive over the air, execution lands on built-in executors only.
             ?: run {
-                val dynamic = dynamicToolProvider().find { it.id == name }
+                val dynamic = if (dynamicToolsEnabled()) dynamicToolProvider().find { it.id == name } else null
                 if (dynamic != null && dynamicExecutor != null) {
                     val executor = dynamicExecutor.invoke()
                     val args = try { parseJsonToMap(arguments) } catch (e: Exception) {

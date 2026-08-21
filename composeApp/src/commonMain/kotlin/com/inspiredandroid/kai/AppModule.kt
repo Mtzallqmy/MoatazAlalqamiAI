@@ -83,6 +83,12 @@ val appModule = module {
         ToolExecutor(
             dynamicToolProvider = { get<com.inspiredandroid.kai.hotupdate.RemoteConfigService>().dynamicTools() },
             dynamicExecutor = { get<com.inspiredandroid.kai.hotupdate.DynamicToolExecutor>() },
+            dynamicToolsEnabled = {
+                com.inspiredandroid.kai.hotupdate.FeatureFlags.isOn(
+                    get<com.inspiredandroid.kai.hotupdate.RemoteConfigService>(),
+                    com.inspiredandroid.kai.hotupdate.FeatureFlags.DYNAMIC_TOOLS,
+                )
+            },
         )
     }
     single<MemoryStore> {

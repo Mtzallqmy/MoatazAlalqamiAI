@@ -14,6 +14,7 @@ class RemoteCatalogTest {
     @AfterTest
     fun cleanup() {
         ProviderRegistry.applyRemoteCatalog(emptyList())
+        RemoteManifestVerifier.pinPublicKeyHex("")
     }
 
     @Test
@@ -104,7 +105,6 @@ class RemoteCatalogTest {
         val (privateKey, publicKey) = generateEd25519KeypairForTest()
         val signature = signEd25519ForTest(privateKey, payload.encodeToByteArray())
         val envelope = signedCatalogEnvelope(publicKey, payload, signature)
-        // Without a pinned key the verifier accepts payload + signature presence.
         RemoteManifestVerifier.pinPublicKeyHex(publicKey)
         val result = RemoteManifestVerifier.verifyCatalogPayload(envelope)
         if (result.isFailure) println("DIAG-FAILURE: ${result.exceptionOrNull()?.message}")
