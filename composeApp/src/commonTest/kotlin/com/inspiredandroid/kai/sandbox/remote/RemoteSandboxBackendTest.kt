@@ -32,7 +32,7 @@ class RemoteSandboxBackendTest {
                 networkCalls++
                 respond("[]", headers = jsonHeaders)
             },
-            auth = RemoteSandboxBackend.GatewayAuth("expired", expiresEpochMs = 99),
+            auth = RemoteSandboxBackend.Companion.GatewayAuth("expired", expiresEpochMs = 99),
         )
 
         assertFailsWith<SandboxError.AuthError> { backend.listProcesses("sandbox") }
@@ -41,7 +41,7 @@ class RemoteSandboxBackendTest {
 
     @Test
     fun `token without expiry fails closed`() = runTest {
-        val backend = backend(auth = RemoteSandboxBackend.GatewayAuth("not-scoped-by-time"))
+        val backend = backend(auth = RemoteSandboxBackend.Companion.GatewayAuth("not-scoped-by-time"))
         assertFailsWith<SandboxError.AuthError> { backend.listProcesses("sandbox") }
     }
 
@@ -79,8 +79,8 @@ class RemoteSandboxBackendTest {
     private fun backend(
         url: String = "https://gateway.example",
         engine: MockEngine = MockEngine { respond("[]", headers = jsonHeaders) },
-        auth: RemoteSandboxBackend.GatewayAuth =
-            RemoteSandboxBackend.GatewayAuth("short-lived", expiresEpochMs = 120_000),
+        auth: RemoteSandboxBackend.Companion.GatewayAuth =
+            RemoteSandboxBackend.Companion.GatewayAuth("short-lived", expiresEpochMs = 120_000),
     ) = RemoteSandboxBackend(
         gatewayUrl = url,
         fetchAuth = { auth },
