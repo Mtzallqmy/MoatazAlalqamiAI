@@ -520,4 +520,7 @@
     <string name="agents_reject">Reject</string>
     <string name="agents_no_pending">No pending approvals</string>
     <string name="settings_sandbox_copy_diagnostics">Copy runtime diagnostics</string>
+    <string name="chat_terminal_command">Command in /workspace</string>
+    <string name="chat_terminal_run">Run</string>
+    <string name="chat_terminal_cancel">Cancel</string>
 </resources>

@@ -26,6 +26,7 @@ import com.inspiredandroid.kai.linux.LinuxDistro
 import com.inspiredandroid.kai.mcp.McpServerConfig
 import com.inspiredandroid.kai.mcp.McpServerManager
 import com.inspiredandroid.kai.gateway.RoutingProfileId
+import com.inspiredandroid.kai.gateway.TaskType
 import com.inspiredandroid.kai.network.AllServicesFailedException
 import com.inspiredandroid.kai.network.AnthropicInsufficientCreditsException
 import com.inspiredandroid.kai.network.ContextWindowExceededException
@@ -962,6 +963,14 @@ class RemoteDataRepository(
 
     private data class FallbackEntry(val instanceId: String, val service: Service)
 
+    private fun crossesProviderBoundary(source: FallbackEntry, destination: FallbackEntry): Boolean =
+        com.inspiredandroid.kai.gateway.ProviderBoundary.crosses(
+            sourceProviderId = source.service.id,
+            sourceEndpoint = getInstanceBaseUrl(source.instanceId, source.service),
+            destinationProviderId = destination.service.id,
+            destinationEndpoint = getInstanceBaseUrl(destination.instanceId, destination.service),
+        )
+
     private fun getOrderedFallbackEntries(): List<FallbackEntry> {
         val instances = getConfiguredServiceInstances()
         val entries = instances.map { FallbackEntry(instanceId = it.instanceId, service = Service.fromId(it.serviceId)) }
@@ -1149,6 +1158,23 @@ class RemoteDataRepository(
 
         try {
             for ((index, entry) in fallbackEntries.withIndex()) {
+                // A fallback iteration is the last boundary before the same
+                // prompt/history is sent to another provider. Gate it here so
+                // context-window skips and transport failures are both covered.
+                val previousEntry = fallbackEntries.getOrNull(index - 1)
+                if (coordinator != null && previousEntry != null && crossesProviderBoundary(previousEntry, entry)) {
+                    val blocked = coordinator.authorizeProviderTransfer(
+                        sourceProviderInstanceId = previousEntry.instanceId,
+                        destinationProviderInstanceId = entry.instanceId,
+                        taskType = gatewayDecision?.taskType ?: TaskType.Chat,
+                        cause = lastException ?: com.inspiredandroid.kai.gateway.AiRequestError.UnknownError(
+                            "Previous provider was not usable",
+                        ),
+                    )
+                    if (blocked != null) {
+                        throw com.inspiredandroid.kai.gateway.ProviderTransferNotApprovedException(blocked)
+                    }
+                }
                 // Skip fallback services whose context window is too small for the current history
                 // On-device models handle their own context limits, so skip this check for them
                 if (!entry.service.isOnDevice) {

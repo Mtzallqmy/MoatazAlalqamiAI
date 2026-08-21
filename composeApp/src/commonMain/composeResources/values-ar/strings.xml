@@ -504,4 +504,7 @@
     <string name="settings_sandbox_migrate_action">نسخ الملفات</string>
     <string name="settings_sandbox_uninstall_confirm_shared">ستُفقد جميع البيانات في بيئة Linux المحمية، وسيفقد Moataz Code نظام Linux الخاص به أيضًا — لأنه يستخدم النظام نفسه. تُحفظ مشاريعك. هل أنت متأكد من رغبتك في إزالة التثبيت؟</string>
     <string name="settings_sandbox_copy_diagnostics">نسخ تشخيص Moataz Runtime</string>
+    <string name="chat_terminal_command">أمر داخل /workspace</string>
+    <string name="chat_terminal_run">تشغيل</string>
+    <string name="chat_terminal_cancel">إلغاء</string>
 </resources>

@@ -14,11 +14,17 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,6 +34,9 @@ import com.inspiredandroid.kai.TerminalLine
 import kai.composeapp.generated.resources.Res
 import kai.composeapp.generated.resources.chat_sandbox_terminal
 import kai.composeapp.generated.resources.chat_sandbox_terminal_minimize
+import kai.composeapp.generated.resources.chat_terminal_cancel
+import kai.composeapp.generated.resources.chat_terminal_command
+import kai.composeapp.generated.resources.chat_terminal_run
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -44,6 +53,9 @@ fun TerminalPanel(
     lines: List<TerminalLine>,
     minimized: Boolean,
     onToggleMinimize: () -> Unit,
+    onSubmitCommand: ((String) -> Unit)? = null,
+    onCancelCommand: (() -> Unit)? = null,
+    commandRunning: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val accent = MaterialTheme.colorScheme.surfaceVariant
@@ -98,6 +110,41 @@ fun TerminalPanel(
                             text = "Sandbox terminal ready — the agent's commands appear here.",
                             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            if (onSubmitCommand != null) {
+                var command by remember { mutableStateOf("") }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = command,
+                        onValueChange = { command = it },
+                        enabled = !commandRunning,
+                        singleLine = true,
+                        label = { Text(stringResource(Res.string.chat_terminal_command)) },
+                        textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(
+                        onClick = {
+                            if (commandRunning) {
+                                onCancelCommand?.invoke()
+                            } else {
+                                command.trim().takeIf(String::isNotEmpty)?.let {
+                                    onSubmitCommand(it)
+                                    command = ""
+                                }
+                            }
+                        },
+                    ) {
+                        Text(
+                            stringResource(
+                                if (commandRunning) Res.string.chat_terminal_cancel else Res.string.chat_terminal_run,
+                            ),
                         )
                     }
                 }

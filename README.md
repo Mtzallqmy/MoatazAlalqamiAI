@@ -104,6 +104,8 @@ APK الناتج: `androidApp/build/outputs/apk/foss/debug/androidApp-foss-debug
 | `docs/TERMINAL_ARCHITECTURE.md` | PTY/VT وحدود terminal core |
 | `docs/CLI_EXTENSION_GUIDE.md` | إضافة CLI جديدة بأقل تغييرات |
 | `docs/SECURITY.md` | نموذج التهديدات وقرارات الأمان |
+| `docs/AGENT_WORKFLOW.md` | دورة الوكيل، أدلة الإنجاز وحدود الموافقة |
+| `docs/WORKSPACE_ARCHITECTURE.md` | الاستيراد وGit والبناء وsnapshot/undo |
 | `docs/PRIVACY.md` | سياسة الخصوصية وبيانات المستخدم |
 | `LEGAL_COMPLIANCE.md` | الترخيص وأصل المشروع |
 
