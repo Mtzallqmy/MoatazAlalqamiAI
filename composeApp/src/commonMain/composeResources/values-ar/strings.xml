@@ -1,4 +1,13 @@
 <resources>
+    <string name="settings_api_diagnostics">تشخيص API</string>
+    <string name="settings_api_diagnostics_run">تشغيل التشخيص الكامل</string>
+    <string name="settings_api_diagnostics_agents_ready">جاهز للمحادثة وأدوات بيئة العمل</string>
+    <string name="settings_api_diagnostics_chat_only">المحادثة جاهزة، لكن استدعاء أدوات البيئة غير مثبت</string>
+    <string name="settings_api_diagnostics_unusable">هذا المزود غير جاهز للمحادثة</string>
+    <string name="settings_api_diagnostics_label_connection">الاتصال</string>
+    <string name="settings_api_diagnostics_label_models">النماذج</string>
+    <string name="settings_api_diagnostics_label_chat">المحادثة</string>
+    <string name="settings_api_diagnostics_label_tools">استدعاء الأدوات</string>
     <string name="welcome_message">مرحبًا بك في Moataz Alalqami AI</string>
     <string name="prompt_ask_question">اطرح سؤالًا</string>
     <string name="error_invalid_api_key">مفتاح API غير صالح. يرجى التحقق من إعداداتك.</string>
@@ -219,15 +228,16 @@
     <string name="settings_open_github_issue">فتح مشكلة GitHub</string>
     <string name="notification_channel_name">إشعارات الذكاء الاصطناعي</string>
     <string name="notification_channel_description">إشعارات مرسلة من مساعد الذكاء الاصطناعي</string>
-    <string name="settings_tab_sandbox">Linux Sandbox</string>
-    <string name="settings_sandbox_description">ثبّت بيئة Linux ليتمكّن الذكاء الاصطناعي من تشغيل أوامر الطرفية والنصوص البرمجية والأدوات نيابةً عنك. يعمل بأمان داخل التطبيق. ~3 ميغابايت للتنزيل.</string>
+    <string name="settings_tab_sandbox">Moataz Runtime</string>
+    <string name="settings_sandbox_description">ثبّت Moataz Runtime ليتمكّن الذكاء الاصطناعي من تشغيل أوامر الطرفية والنصوص البرمجية والأدوات داخل التطبيق.</string>
+    <string name="settings_sandbox_runtime_title">Moataz Runtime · %1$s</string>
     <string name="settings_sandbox_install">تثبيت</string>
     <string name="settings_sandbox_install_packages">تثبيت الحزم الأساسية</string>
     <string name="settings_sandbox_uninstall">إزالة التثبيت</string>
     <string name="settings_sandbox_uninstall_confirm">ستُفقد جميع البيانات في بيئة Linux المحمية. هل أنت متأكد من رغبتك في إزالة التثبيت؟</string>
     <string name="settings_sandbox_cancel">إلغاء</string>
     <string name="settings_sandbox_disk_usage">%1$d ميجابايت</string>
-    <string name="terminal_title">الطرفية</string>
+    <string name="terminal_title">Moataz Terminal</string>
     <string name="terminal_help_text">يستخدم الذكاء الاصطناعي هذه البيئة لتشغيل الأوامر.\nيمكنك أيضًا تشغيل الأوامر يدويًا أدناه.</string>
     <string name="terminal_input_placeholder">أدخل أمرًا…</string>
     <string name="terminal_run_content_description">تشغيل</string>
@@ -439,7 +449,7 @@
     <string name="kai_build_exit_content_description">الخروج من Moataz Code</string>
     <string name="kai_build_back_content_description">العودة إلى المشاريع</string>
     <string name="kai_build_setup_title">إعداد Linux (تجريبي)</string>
-    <string name="kai_build_setup_description">Moataz Code في مرحلة تجريبية. يعمل Debian Trixie عبر proot داخل هذا التطبيق، مع curl وgit وwget وpython3 وأساسيات أخرى. التثبيت الأول يحمّل حوالي 100 ميجابايت ويحتاج إلى شبكة.</string>
+    <string name="kai_build_setup_description">يتضمن Moataz Runtime نظام Debian 13 وأدوات التطوير الأساسية وOpenCode داخل التطبيق. يتحقق الإعداد من البيئة المضمّنة ويستخرجها؛ لا تُطلب الشبكة إلا لاحقًا للخدمات أو التحديثات عبر الإنترنت.</string>
     <string name="kai_build_setup_agents_title">وكلاء البرمجة</string>
     <string name="kai_build_setup_agents_description">اختر واجهات سطر الأوامر لتثبيتها على النظام الجديد. يمكنك إضافة الباقي لاحقًا.</string>
     <string name="kai_build_setup_install">تثبيت Debian</string>
@@ -493,4 +503,8 @@
     <string name="settings_sandbox_migrate_detail">%1$d ملف · %2$s في مجلدها الرئيسي ليست هنا بعد. النسخ يحافظ على كل ما هو موجود هنا بالفعل ويترك النظام الآخر دون تغيير، لذا يمكنك إزالة تثبيته لاحقًا.</string>
     <string name="settings_sandbox_migrate_action">نسخ الملفات</string>
     <string name="settings_sandbox_uninstall_confirm_shared">ستُفقد جميع البيانات في بيئة Linux المحمية، وسيفقد Moataz Code نظام Linux الخاص به أيضًا — لأنه يستخدم النظام نفسه. تُحفظ مشاريعك. هل أنت متأكد من رغبتك في إزالة التثبيت؟</string>
+    <string name="settings_sandbox_copy_diagnostics">نسخ تشخيص Moataz Runtime</string>
+    <string name="chat_terminal_command">أمر داخل /workspace</string>
+    <string name="chat_terminal_run">تشغيل</string>
+    <string name="chat_terminal_cancel">إلغاء</string>
 </resources>

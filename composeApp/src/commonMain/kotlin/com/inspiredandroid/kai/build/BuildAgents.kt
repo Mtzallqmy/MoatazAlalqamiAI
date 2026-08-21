@@ -33,7 +33,9 @@ data class BuildAgent(
 object BuildAgents {
     val registry = CliRegistry()
     val all: ImmutableList<BuildAgent> = persistentListOf(
-        *registry.all().filter { it.category == CliCategory.Agent }.map { BuildAgent(it) }.toTypedArray(),
+        *registry.all().filter { it.category == CliCategory.Agent }
+            .map { BuildAgent(it, autoInstall = it.id == "opencode") }
+            .toTypedArray(),
     )
 
     /** Agents installed automatically with Debian — no user selection needed. */

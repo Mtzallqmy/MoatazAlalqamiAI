@@ -119,7 +119,7 @@ val appModule = module {
         HeartbeatManager(get(), get(), get(), get())
     }
     single<McpServerManager> {
-        McpServerManager(get())
+        McpServerManager(get(), get())
     }
     single<SkillManager> {
         SkillManager(get<SandboxController>())

@@ -20,7 +20,7 @@ class EnvironmentRepairExecutor(private val paths: LinuxPaths) {
             when (action) {
                 is EnvironmentRepairAction.InstallPackages -> {
                     val result = launcher().execute(
-                        AptPackageManager.installCommand(action.packages.joinToString(" ")),
+                        AptPackageManager.installCommand(action.packages),
                         timeoutSeconds = 900,
                     )
                     if (!result.success) {

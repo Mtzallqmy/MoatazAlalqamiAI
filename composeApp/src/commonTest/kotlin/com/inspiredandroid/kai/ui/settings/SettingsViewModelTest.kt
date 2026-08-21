@@ -2,6 +2,8 @@ package com.inspiredandroid.kai.ui.settings
 
 import app.cash.turbine.test
 import com.inspiredandroid.kai.DaemonController
+import com.inspiredandroid.kai.data.DiagnosticCheck
+import com.inspiredandroid.kai.data.ProviderDiagnosticReport
 import com.inspiredandroid.kai.data.Service
 import com.inspiredandroid.kai.data.TaskScheduler
 import com.inspiredandroid.kai.testutil.FakeDataRepository
@@ -52,6 +54,33 @@ class SettingsViewModelTest {
             val state = awaitItem()
             assertTrue(state.configuredServices.isEmpty())
         }
+    }
+
+    @Test
+    fun `provider diagnostic summary distinguishes unusable chat and agent readiness`() {
+        val base = ProviderDiagnosticReport(
+            instanceId = "provider",
+            providerName = "Provider",
+            modelId = "model",
+            endpoint = "https://example.invalid",
+            connection = DiagnosticCheck.failed("offline"),
+            modelDiscovery = DiagnosticCheck.skipped("offline"),
+            chatCompletion = DiagnosticCheck.skipped("offline"),
+            toolCalling = DiagnosticCheck.skipped("offline"),
+            latencyMs = 0,
+            checkedAtEpochMs = 0,
+        )
+
+        assertEquals(ProviderDiagnosticSummary.Unusable, providerDiagnosticSummary(base))
+        val chatReady = base.copy(
+            connection = DiagnosticCheck.passed("connected"),
+            chatCompletion = DiagnosticCheck.passed("responded"),
+        )
+        assertEquals(ProviderDiagnosticSummary.ChatReady, providerDiagnosticSummary(chatReady))
+        assertEquals(
+            ProviderDiagnosticSummary.AgentReady,
+            providerDiagnosticSummary(chatReady.copy(toolCalling = DiagnosticCheck.passed("verified"))),
+        )
     }
 
     @Test

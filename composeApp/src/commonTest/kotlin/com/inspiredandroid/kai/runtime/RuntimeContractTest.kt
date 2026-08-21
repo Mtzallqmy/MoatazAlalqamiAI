@@ -7,6 +7,21 @@ import kotlin.test.assertTrue
 import kotlin.test.assertFailsWith
 
 class RuntimeContractTest {
+    private fun productionManifest(embeddedCli: Map<String, String> = mapOf("opencode" to "1.18.19")) =
+        RootfsManifest(
+            schemaVersion = 2,
+            distro = "debian",
+            version = "13",
+            codename = "trixie",
+            architecture = "arm64",
+            buildId = "test",
+            sha256 = "a".repeat(64),
+            requiredCli = MoatazRuntimeContract.requiredCli,
+            createdAt = "2026-08-20T00:00:00Z",
+            assetParts = listOf(RootfsAssetPart("rootfs.part-00", "b".repeat(64), 1)),
+            embeddedCli = embeddedCli,
+        )
+
     @Test fun `debian 13 arm64 is accepted`() {
         val issues = validateRuntimeIdentity(OsRelease.parse("ID=debian\nVERSION_ID=13\nVERSION_CODENAME=trixie\n"), "arm64\n")
         assertTrue(issues.isEmpty())
@@ -31,12 +46,55 @@ class RuntimeContractTest {
         assertFalse(manifest.isProductionRuntime())
     }
 
+    @Test fun `production manifest requires embedded OpenCode`() {
+        assertTrue(productionManifest().isProductionRuntime())
+        assertFalse(productionManifest(emptyMap()).isProductionRuntime())
+    }
+
     @Test fun `missing cli gets targeted apt repair`() {
         val health = EnvironmentHealth(listOf(EnvironmentIssue.MissingCli("rg", "missing")))
         val plan = EnvironmentRepairPlanner.plan(health)
         val install = assertIs<EnvironmentRepairAction.InstallPackages>(plan.actions.single())
         assertTrue("ripgrep" in install.packages)
         assertFalse(plan.requiresReinstall)
+    }
+
+    @Test fun `broken embedded agent requires runtime reinstall`() {
+        val plan = EnvironmentRepairPlanner.plan(
+            EnvironmentHealth(listOf(EnvironmentIssue.AgentBinaryBroken("OpenCode probe failed"))),
+        )
+        assertTrue(plan.requiresReinstall)
+        assertIs<EnvironmentRepairAction.ReinstallRuntimePreservingProjects>(plan.actions.single())
+    }
+
+    @Test fun `boot probe failure requires runtime reinstall`() {
+        val plan = EnvironmentRepairPlanner.plan(
+            EnvironmentHealth(listOf(EnvironmentIssue.BootProbeFailed("proot failed"))),
+        )
+        assertTrue(plan.requiresReinstall)
+        assertIs<EnvironmentRepairAction.ReinstallRuntimePreservingProjects>(plan.actions.single())
+    }
+
+    @Test fun `pty failure requires runtime reinstall`() {
+        val plan = EnvironmentRepairPlanner.plan(
+            EnvironmentHealth(listOf(EnvironmentIssue.PtyUnavailable("pty failed"))),
+        )
+        assertTrue(plan.requiresReinstall)
+        assertIs<EnvironmentRepairAction.ReinstallRuntimePreservingProjects>(plan.actions.single())
+    }
+
+    @Test fun `multiple fatal runtime issues produce one reinstall action`() {
+        val plan = EnvironmentRepairPlanner.plan(
+            EnvironmentHealth(
+                listOf(
+                    EnvironmentIssue.BootProbeFailed("proot failed"),
+                    EnvironmentIssue.PtyUnavailable("pty failed"),
+                    EnvironmentIssue.AgentBinaryBroken("agent failed"),
+                ),
+            ),
+        )
+        assertTrue(plan.requiresReinstall)
+        assertIs<EnvironmentRepairAction.ReinstallRuntimePreservingProjects>(plan.actions.single())
     }
 
     @Test fun `marker is not written before health checks pass`() {

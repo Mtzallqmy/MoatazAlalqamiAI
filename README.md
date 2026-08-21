@@ -19,7 +19,8 @@
 - **URL Normalization protocol-aware**: تطبيع عناوين المزودين وفق بروتوكول كل مزود (OpenAI Chat/Responses، Anthropic Messages، Gemini Native، Ollama، LiteRT) مع رفض أي عنوان يحوي بيانات اعتماد.
 
 ### أمان وتخزين مشفر
-- **SecretStore**: كل مفاتيح API وTokens تحفظ مشفرة في Android Keystore-backed EncryptedPrefs — لا نص عادي إطلاقًا.
+- **SecretStore**: مفاتيح API وTokens وكلمات مرور البريد وMCP credential headers تحفظ مشفرة في Android Keystore-backed EncryptedPrefs.
+- **تصدير آمن للإعدادات**: يحذف الأسرار من ملفات JSON، مع بقاء استيراد النسخ القديمة متوافقًا.
 - **مهاجر تلقائي**: ينقل مفاتيح API القديمة من التخزين النصي إلى التخزين المشفر عند أول تشغيل.
 - **Approval Engine** للوكلاء: Safe / Balanced / Autonomous — مع حظر نهائي للعمليات المدمرة (`git reset --hard`، `git clean -fd`، force push) وحظر تشغيل أي أداة مجهولة (حماية من Prompt Injection).
 
@@ -41,6 +42,7 @@ LiteRT لتشغيل نماذج GGUF/ONNX على الجهاز بدون إنترن
 - Debian 13 Trixie arm64 تحت PRoot، بصورة rootfs مضمّنة وmanifest/SHA-256.
 - `/workspace` هو جذر المشاريع الموحد، مع mount توافق إلى `/root/projects`.
 - Ready لا تُعرض إلا بعد فحص PRoot وshell وCLI والملفات وPTY.
+- Runtime diagnostics قابلة للنسخ مع إخفاء الأسرار وتسجيل زمن التثبيت وبدء shell.
 - Moataz Terminal تحتفظ بمحرك PTY/VT الحقيقي، وCLI Registry يفصل Claude Code وOpenCode وGrok عن terminal core.
 
 ---
@@ -85,7 +87,11 @@ APK الناتج: `androidApp/build/outputs/apk/foss/debug/androidApp-foss-debug
 
 ## CI
 
-يُبنى الاختبار مع `testAndroid` في GitHub Actions (`.github/workflows/build.yml`): JDK 21 + Android SDK 37 + gradle test + APK assemble.
+يفحص GitHub Actions (`.github/workflows/build.yml`) أجزاء rootfs و17 CLI،
+ويشغّل `testAndroid` ثم يبني Foss Debug وFoss Release. يتحقق بعدها من
+`applicationId=com.inspiredandroid.kai` و`versionCode` ومكتبات arm64 فقط،
+ويفشل إذا كان Release APK غير موقّع أو يحمل شهادة Android Debug. يستخدم CI
+شهادة مؤقتة للتحقق ولا يرفعها كـartifact.
 
 ## الوثائق
 
@@ -98,6 +104,8 @@ APK الناتج: `androidApp/build/outputs/apk/foss/debug/androidApp-foss-debug
 | `docs/TERMINAL_ARCHITECTURE.md` | PTY/VT وحدود terminal core |
 | `docs/CLI_EXTENSION_GUIDE.md` | إضافة CLI جديدة بأقل تغييرات |
 | `docs/SECURITY.md` | نموذج التهديدات وقرارات الأمان |
+| `docs/AGENT_WORKFLOW.md` | دورة الوكيل، أدلة الإنجاز وحدود الموافقة |
+| `docs/WORKSPACE_ARCHITECTURE.md` | الاستيراد وGit والبناء وsnapshot/undo |
 | `docs/PRIVACY.md` | سياسة الخصوصية وبيانات المستخدم |
 | `LEGAL_COMPLIANCE.md` | الترخيص وأصل المشروع |
 

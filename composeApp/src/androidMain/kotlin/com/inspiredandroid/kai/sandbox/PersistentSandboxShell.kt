@@ -2,6 +2,8 @@ package com.inspiredandroid.kai.sandbox
 
 import com.inspiredandroid.kai.linux.ProotHandle
 import com.inspiredandroid.kai.smartTruncate
+import com.inspiredandroid.kai.runtime.RuntimeDiagnosticEvent
+import com.inspiredandroid.kai.runtime.RuntimeDiagnosticsSink
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +43,7 @@ class PersistentSandboxShell(
 
     @Volatile private var bashPid: Int? = null
     private var watchdog: Job? = null
+    @Volatile private var shellStartedNanos: Long? = null
     private val currentSink = AtomicReference<CommandSink?>(null)
 
     private class CommandSink(
@@ -170,11 +173,22 @@ class PersistentSandboxShell(
         // them in-process (so cd/export/. preserve state), and inherits its
         // stdin to any foreground child (so ssh can read passwords typed via
         // writeInput).
-        val h = executor.executeStreaming(
-            command = "exec bash --noprofile --norc",
-            onStdout = { line -> dispatchStdout(line) },
-            onStderr = { line -> dispatchStderr(line) },
-        )
+        val started = System.nanoTime()
+        shellStartedNanos = started
+        val h = try {
+            executor.executeStreaming(
+                command = "exec bash --noprofile --norc",
+                workingDir = "/workspace",
+                onStdout = { line -> dispatchStdout(line) },
+                onStderr = { line -> dispatchStderr(line) },
+            )
+        } catch (e: Exception) {
+            shellStartedNanos = null
+            RuntimeDiagnosticsSink.Shared.record(
+                RuntimeDiagnosticEvent("chat_shell_start", "bash", null, (System.nanoTime() - started) / 1_000_000, null, e.message),
+            )
+            throw e
+        }
         handle = h
         // Capture bash's pid before any user command runs. The dispatcher
         // recognizes this marker on stderr and sets bashPid, so cancel on
@@ -208,7 +222,15 @@ class PersistentSandboxShell(
         // Startup pid probe — handled regardless of whether a sink is active.
         if (line.startsWith(PID_PROBE_PREFIX) && line.endsWith(RS)) {
             val pidText = line.substring(PID_PROBE_PREFIX.length, line.length - 1)
-            pidText.toIntOrNull()?.let { bashPid = it }
+            pidText.toIntOrNull()?.let {
+                bashPid = it
+                shellStartedNanos?.let { started ->
+                    RuntimeDiagnosticsSink.Shared.record(
+                        RuntimeDiagnosticEvent("chat_shell_start", "bash", 0, (System.nanoTime() - started) / 1_000_000, null, null),
+                    )
+                    shellStartedNanos = null
+                }
+            }
             return
         }
         val sink = currentSink.get() ?: return

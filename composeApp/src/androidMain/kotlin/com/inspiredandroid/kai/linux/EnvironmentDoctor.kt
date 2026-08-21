@@ -8,11 +8,12 @@ import com.inspiredandroid.kai.runtime.validateRuntimeIdentity
 import com.inspiredandroid.kai.runtime.RuntimeDiagnosticEvent
 import com.inspiredandroid.kai.runtime.RuntimeDiagnosticsSink
 import java.io.File
+import java.util.UUID
 
 /** Authoritative runtime probe. A marker is never accepted as a substitute for this. */
 class EnvironmentDoctor(
     private val paths: LinuxPaths,
-    private val diagnostics: RuntimeDiagnosticsSink = RuntimeDiagnosticsSink.None,
+    private val diagnostics: RuntimeDiagnosticsSink = RuntimeDiagnosticsSink.Shared,
 ) {
 
     fun diagnose(): EnvironmentHealth {
@@ -59,9 +60,23 @@ class EnvironmentDoctor(
             }
         }
 
+        // A directory existing at the guest path only proves that the mount point
+        // was created. Prove that both compatibility paths resolve to the same
+        // writable host workspace by writing through each path and reading through
+        // the other. The trap keeps a cancelled/failed probe from leaving litter in
+        // a user project directory.
+        val workspaceProbeName = ".moataz-health-${UUID.randomUUID().toString().replace("-", "")}"
+        val workspaceProbeValue = workspaceProbeName.removePrefix(".moataz-health-")
         val filesystem = launcher.probe(
             stage = "filesystem",
-            command = "test -w /tmp && test -w /root && test -d /workspace && test -d /root/projects",
+            command =
+                "probe=${shellQuote(workspaceProbeName)}; " +
+                    "trap 'rm -f \"/workspace/\$probe\" \"/root/projects/\$probe\"' EXIT; " +
+                    "test -w /tmp && test -w /root && test -d /workspace && test -d /root/projects && " +
+                    "printf '%s' ${shellQuote(workspaceProbeValue)} > \"/workspace/\$probe\" && " +
+                    "test \"\$(cat \"/root/projects/\$probe\")\" = ${shellQuote(workspaceProbeValue)} && " +
+                    "printf '%s' ${shellQuote("${workspaceProbeValue}-reverse")} > \"/root/projects/\$probe\" && " +
+                    "test \"\$(cat \"/workspace/\$probe\")\" = ${shellQuote("${workspaceProbeValue}-reverse")}",
             timeoutSeconds = 20,
             workingDir = MoatazRuntimeContract.workspaceRoot,
         )
@@ -79,6 +94,17 @@ class EnvironmentDoctor(
             timeoutSeconds = 20,
         )
         if (!pty.success) issues += EnvironmentIssue.PtyUnavailable(pty.failureDetail())
+
+        val opencode = launcher.probe(
+            stage = "embedded_opencode",
+            command = "command -v opencode >/dev/null 2>&1 && opencode --version >/dev/null 2>&1",
+            timeoutSeconds = 30,
+        )
+        if (!opencode.success) {
+            issues += EnvironmentIssue.AgentBinaryBroken(
+                opencode.failureDetail().ifBlank { "Embedded OpenCode is missing or cannot execute" },
+            )
+        }
         return EnvironmentHealth(issues)
     }
 
@@ -121,4 +147,6 @@ class EnvironmentDoctor(
         extraArgs = DebianSpec.prootArgs,
         env = DebianSpec.env,
     )
+
+    private fun shellQuote(value: String): String = "'${value.replace("'", "'\\''")}'"
 }

@@ -1,11 +1,49 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "distro": "debian",
   "version": "13",
   "codename": "trixie",
   "architecture": "arm64",
-  "buildId": "linuxcontainers-20260820_05:24",
-  "sha256": "50adbe05c2e657aaf4e3c82dd94e3933f5be73edff84e2048e6c0e2b3f676824",
-  "requiredCli": ["bash", "sh", "git", "curl", "wget", "tar", "xz", "python3", "ps", "pgrep", "pkill", "jq", "rg", "ssh", "rsync", "file", "sha256sum"],
-  "createdAt": "2026-08-20T05:24:00Z"
+  "buildId": "moataz-runtime-opencode-1.18.19",
+  "sha256": "5dec2beea288cdadcbf61eecae7cbcc4fe8557c3ae10098d60fc58cc50ec4d80",
+  "requiredCli": [
+    "bash",
+    "sh",
+    "git",
+    "curl",
+    "wget",
+    "tar",
+    "xz",
+    "python3",
+    "ps",
+    "pgrep",
+    "pkill",
+    "jq",
+    "rg",
+    "ssh",
+    "rsync",
+    "file",
+    "sha256sum"
+  ],
+  "createdAt": "2026-08-20T16:04:31Z",
+  "assetParts": [
+    {
+      "name": "moataz-debian-rootfs-arm64.tar.xz.part-00",
+      "sha256": "a4ecd5daf4c24d1434a391313fce9e0cbb71324eb69f3ac0a1c2674627220fb3",
+      "sizeBytes": 67108864
+    },
+    {
+      "name": "moataz-debian-rootfs-arm64.tar.xz.part-01",
+      "sha256": "e849fbcbd2db51527bbdb06026b236bf778a2569635d5cea589f1c2bbba718e6",
+      "sizeBytes": 67108864
+    },
+    {
+      "name": "moataz-debian-rootfs-arm64.tar.xz.part-02",
+      "sha256": "4186accaeee61a2baec7c1889b49d9e1ca29f6eba980327f7f5c810515da8409",
+      "sizeBytes": 10444248
+    }
+  ],
+  "embeddedCli": {
+    "opencode": "1.18.19"
+  }
 }

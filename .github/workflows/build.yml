@@ -5,9 +5,17 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -16,10 +24,29 @@ jobs:
           java-version: 21
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+      - name: Create CI release-signing identity
+        # Ephemeral validation key: proves the release variant is actually signed,
+        # but is never uploaded or used as the production distribution identity.
+        run: |
+          CI_KEYSTORE="$RUNNER_TEMP/moataz-ci-release.jks"
+          keytool -genkeypair -noprompt \
+            -keystore "$CI_KEYSTORE" \
+            -storepass moataz-ci-validation \
+            -keypass moataz-ci-validation \
+            -alias moataz-ci-release \
+            -keyalg RSA \
+            -keysize 3072 \
+            -validity 2 \
+            -dname "CN=Moataz CI Release, O=Moataz CI, C=YE"
+          echo "KEYSTORE_FILE=$CI_KEYSTORE" >> "$GITHUB_ENV"
+          echo "KEYSTORE_PASSWORD=moataz-ci-validation" >> "$GITHUB_ENV"
+          echo "KEY_ALIAS=moataz-ci-release" >> "$GITHUB_ENV"
+      - name: Test rootfs verifier
+        run: python3 -m unittest scripts.test_verify_rootfs --verbose
       - name: Build & Test
         run: |
           python3 scripts/verify_rootfs.py \
-            androidApp/src/main/assets/moataz-debian-rootfs-arm64.tar.xz \
+            androidApp/src/main/assets \
             androidApp/src/main/assets/moataz-debian-rootfs-arm64.manifest.json
           ./gradlew :composeApp:testAndroid --no-daemon
           ./gradlew :androidApp:assembleFossDebug --no-daemon
@@ -37,11 +64,21 @@ jobs:
           zipinfo -1 "$APK" | grep '^lib/arm64-v8a/libproot-loader.so$'
           zipinfo -1 "$APK" | grep '^lib/arm64-v8a/libtalloc.so$'
           ! zipinfo -1 "$APK" | grep -E '^lib/(x86|x86_64|armeabi-v7a)/'
-          zipinfo -1 "$APK" | grep 'assets/moataz-debian-rootfs-arm64.tar.xz$'
+          zipinfo -1 "$APK" | grep 'assets/moataz-debian-rootfs-arm64.tar.xz.part-'
           zipinfo -1 "$APK" | grep 'assets/moataz-debian-rootfs-arm64.manifest.json$'
-          "$AAPT" dump badging "$APK" | grep -E "versionCode='[1-9][0-9]*'"
-          "$APKSIGNER" verify --print-certs "$APK" > /tmp/release-certs.txt 2>&1 || true
-          ! grep -q 'Android Debug' /tmp/release-certs.txt
+          PACKAGE_INFO="$("$AAPT" dump badging "$APK" | grep '^package:')"
+          printf '%s\n' "$PACKAGE_INFO" | grep -E "^package: name='com\.inspiredandroid\.kai' "
+          printf '%s\n' "$PACKAGE_INFO" | grep -E "versionCode='[1-9][0-9]*'"
+          CERTS="$RUNNER_TEMP/release-certs.txt"
+          "$APKSIGNER" verify --verbose --print-certs "$APK" > "$CERTS"
+          cat "$CERTS"
+          # apksigner output differs by build-tools version: current releases
+          # prefix certificate lines with "V2 Signer", older ones with
+          # "Signer #1". Require a certificate DN without coupling CI to the
+          # cosmetic prefix.
+          grep -Eq '^(V[0-9]+ Signer|Signer #[0-9]+).*certificate DN:' "$CERTS"
+          grep -q 'CN=Moataz CI Release' "$CERTS"
+          ! grep -qi 'Android Debug' "$CERTS"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:

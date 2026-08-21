@@ -23,6 +23,7 @@ class AiGatewayCoordinator(
     private val health: ProviderHealthRegistry,
     private val credentials: ProviderCredentialsResolver,
     private val strategy: FallbackStrategy = FallbackStrategy.chatDefaults(),
+    private val transferApproval: ProviderTransferApprovalGate = ProviderTransferApprovalGate.DenyByDefault,
 ) {
 
     /**
@@ -36,6 +37,8 @@ class AiGatewayCoordinator(
         val finalError: AiRequestError?,
         val requiresCompaction: Boolean,
         val decision: RoutingDecision,
+        /** Non-null when execution stopped before transferring prompt data to another instance. */
+        val pendingTransferApproval: ProviderTransferRequest? = null,
     )
 
     data class TriedCandidate(
@@ -56,6 +59,7 @@ class AiGatewayCoordinator(
         configuredInstances: List<String>,
         instanceServiceIds: Map<String, String>,
         profileId: RoutingProfileId? = null,
+        requiresStreaming: Boolean = false,
     ): RoutingDecision {
         val taskType = TaskClassifier.classify(message)
         return router.selectAllCandidates(
@@ -66,6 +70,7 @@ class AiGatewayCoordinator(
             profileId = profileId ?: router.currentProfile().profileId,
             configuredInstances = configuredInstances,
             instanceServiceIds = instanceServiceIds,
+            requiresStreaming = requiresStreaming,
         )
     }
 
@@ -150,6 +155,13 @@ class AiGatewayCoordinator(
                         return Outcome(false, tried, error, requiresCompaction = true, decision)
                     }
                     FallbackAction.TryNextCandidate -> {
+                        val next = candidates.getOrNull(index + 1)
+                        if (next != null && next.providerInstanceId != candidate.providerInstanceId) {
+                            val request = transferRequest(candidate, next, decision, error)
+                            if (transferApproval.decide(request) != ProviderTransferDecision.ApprovedOnce) {
+                                return Outcome(false, tried, error, requiresCompaction, decision, request)
+                            }
+                        }
                         index++
                         attemptOnCurrent = 0
                     }
@@ -166,6 +178,16 @@ class AiGatewayCoordinator(
                 }
                 if (error.requiresCompaction()) {
                     return Outcome(false, tried, error, true, decision)
+                }
+                val next = candidates.getOrNull(index + 1)
+                if (next == null || !error.shouldTryFallback()) {
+                    return Outcome(false, tried, error, false, decision)
+                }
+                if (next.providerInstanceId != candidates[index].providerInstanceId) {
+                    val request = transferRequest(candidates[index], next, decision, error)
+                    if (transferApproval.decide(request) != ProviderTransferDecision.ApprovedOnce) {
+                        return Outcome(false, tried, error, false, decision, request)
+                    }
                 }
                 index++
                 attemptOnCurrent = 0
@@ -192,6 +214,30 @@ class AiGatewayCoordinator(
     private val innerCredentials: ProviderCredentialsResolver = credentials
 
     fun currentProfile(): RoutingProfileConfig = router.currentProfile()
+
+    /**
+     * Approval bridge for legacy request loops that have not moved to [execute].
+     * The caller must invoke this before sending existing prompt/history bytes
+     * to a different provider. Same-provider retries should bypass this method.
+     */
+    suspend fun authorizeProviderTransfer(
+        sourceProviderInstanceId: String,
+        destinationProviderInstanceId: String,
+        taskType: TaskType,
+        cause: Throwable,
+    ): ProviderTransferRequest? {
+        if (sourceProviderInstanceId == destinationProviderInstanceId) return null
+        val request = ProviderTransferRequest(
+            sourceProviderInstanceId = sourceProviderInstanceId,
+            destinationProviderInstanceId = destinationProviderInstanceId,
+            taskType = taskType,
+            routingProfile = currentProfile().profileId,
+            reason = classifyRequestError(cause).category,
+        )
+        return request.takeUnless {
+            transferApproval.decide(it) == ProviderTransferDecision.ApprovedOnce
+        }
+    }
 
     /** Convenience adapters so the repository never reaches past this layer. */
     fun recordProviderSuccess(instanceId: String) {
@@ -236,6 +282,19 @@ class AiGatewayCoordinator(
         delay(base + jitter)
     }
 
+    private fun transferRequest(
+        source: ModelCandidate,
+        destination: ModelCandidate,
+        decision: RoutingDecision,
+        error: AiRequestError,
+    ): ProviderTransferRequest = ProviderTransferRequest(
+        sourceProviderInstanceId = source.providerInstanceId,
+        destinationProviderInstanceId = destination.providerInstanceId,
+        taskType = decision.taskType,
+        routingProfile = decision.profileId,
+        reason = error.category,
+    )
+
     private fun recordUsage(
         candidate: ModelCandidate,
         modelId: String,
@@ -274,13 +333,22 @@ class AiGatewayCoordinator(
             settings: AppSettings,
             credentials: ProviderCredentialsResolver,
             strategy: FallbackStrategy = FallbackStrategy.chatDefaults(),
-        ): AiGatewayCoordinator = AiGatewayCoordinator(
-            router = ModelRouter(settings, ProviderHealthRegistry(settings)),
-            usage = UsageRecorder(settings),
-            health = ProviderHealthRegistry(settings),
-            credentials = credentials,
-            strategy = strategy,
-        )
+            transferApproval: ProviderTransferApprovalGate = ProviderTransferApprovalGate.DenyByDefault,
+            liveCapabilities: ProviderCapabilityRegistry? = null,
+        ): AiGatewayCoordinator {
+            // Router and coordinator must observe the same health registry;
+            // otherwise a failed live probe would not influence routing until
+            // a second, unrelated registry happened to be updated.
+            val health = ProviderHealthRegistry(settings)
+            return AiGatewayCoordinator(
+                router = ModelRouter(settings, health, liveCapabilities),
+                usage = UsageRecorder(settings),
+                health = health,
+                credentials = credentials,
+                strategy = strategy,
+                transferApproval = transferApproval,
+            )
+        }
     }
 }
 

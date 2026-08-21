@@ -90,6 +90,7 @@ import com.inspiredandroid.kai.ui.chat.composables.PendingSmsBanners
 import com.inspiredandroid.kai.ui.chat.composables.QuestionInput
 import com.inspiredandroid.kai.ui.chat.composables.ServiceSelector
 import com.inspiredandroid.kai.ui.chat.composables.TopBar
+import com.inspiredandroid.kai.ui.chat.composables.TerminalPanel
 import com.inspiredandroid.kai.ui.chat.composables.TrailingIcon
 import com.inspiredandroid.kai.ui.chat.composables.UserMessage
 import com.inspiredandroid.kai.ui.chat.composables.WaitingResponseRow
@@ -511,6 +512,7 @@ private fun ChatModeScreen(
     }
     val keyboardController = LocalSoftwareKeyboardController.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val componentScope = rememberCoroutineScope()
 
     // When the active conversation changes (e.g. user starts a new chat from the
     // top bar or taps the heartbeat banner), collapse the sandbox view so the
@@ -541,6 +543,17 @@ private fun ChatModeScreen(
         derivedStateOf {
             historyState.value.any { it.role == History.Role.TOOL_EXECUTING && it.content == "execute_shell_command" }
         }
+    }
+    val liveTerminalLines = remember(sandboxController, uiState.currentConversationId) {
+        val id = uiState.currentConversationId
+        if (sandboxController != null && id != null) sandboxController.transcriptFor(id) else null
+    }
+    var inlineTerminalMinimized by rememberSaveable(uiState.currentConversationId) { mutableStateOf(false) }
+    var inlineTerminalHandle by remember(uiState.currentConversationId) {
+        mutableStateOf<com.inspiredandroid.kai.CommandHandle?>(null)
+    }
+    LaunchedEffect(isShellExecuting) {
+        if (isShellExecuting) inlineTerminalMinimized = false
     }
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).navigationBarsPadding().statusBarsPadding().imePadding()) {
@@ -659,8 +672,6 @@ private fun ChatModeScreen(
                             )
                         } else {
                             val listState = rememberLazyListState()
-                            val componentScope = rememberCoroutineScope()
-
                             LaunchedEffect(uiState.history.size) {
                                 // Capture history at effect start to prevent race conditions
                                 val history = uiState.history
@@ -936,6 +947,48 @@ private fun ChatModeScreen(
             }
 
             if (!isSandboxOpen) {
+                if (liveTerminalLines != null && (isShellExecuting || liveTerminalLines.isNotEmpty())) {
+                    TerminalPanel(
+                        lines = liveTerminalLines,
+                        minimized = inlineTerminalMinimized,
+                        onToggleMinimize = { inlineTerminalMinimized = !inlineTerminalMinimized },
+                        commandRunning = inlineTerminalHandle != null,
+                        onSubmitCommand = { command ->
+                            val sessionId = uiState.currentConversationId
+                            val controller = sandboxController
+                            if (sessionId != null && controller != null) {
+                                componentScope.launch {
+                                    try {
+                                        val handle = controller.executeCommandStreaming(
+                                            command = command,
+                                            onStdout = {},
+                                            onStderr = {},
+                                            sessionId = sessionId,
+                                        )
+                                        inlineTerminalHandle = handle
+                                        try {
+                                            handle.awaitExit()
+                                        } finally {
+                                            if (inlineTerminalHandle === handle) inlineTerminalHandle = null
+                                        }
+                                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                        throw cancelled
+                                    } catch (failure: Exception) {
+                                        liveTerminalLines.add(
+                                            TerminalLine.Error(
+                                                com.inspiredandroid.kai.runtime.RuntimeDiagnosticRedactor.redact(
+                                                    failure.message ?: failure::class.simpleName ?: "Terminal command failed",
+                                                ),
+                                            ),
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        onCancelCommand = { inlineTerminalHandle?.cancel() },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
+                }
                 QuestionInput(
                     files = uiState.files,
                     addFile = uiState.actions.addFile,

@@ -81,4 +81,12 @@ class ApkPackageManagerTest {
         assertEquals("apk del 'py3-pip'", ApkPackageManager.removeCommand("py3-pip"))
         assertEquals("apk search -v 'fast' | head -n 50", ApkPackageManager.searchCommand("fast", 50))
     }
+
+    @Test
+    fun `installing several packages keeps separate shell arguments`() {
+        assertEquals(
+            "apk add --no-cache 'bash' 'python3'",
+            ApkPackageManager.installCommand(listOf("bash", "python3")),
+        )
+    }
 }

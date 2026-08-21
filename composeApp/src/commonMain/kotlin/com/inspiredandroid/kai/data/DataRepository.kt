@@ -47,6 +47,8 @@ interface DataRepository {
     fun updateInstanceCustomModelId(instanceId: String, modelId: String)
     fun clearInstanceModels(instanceId: String, service: Service)
     suspend fun validateConnection(service: Service, instanceId: String)
+    /** Performs a real model response + function-call probe. Only call after an explicit user action. */
+    suspend fun diagnoseProvider(instanceId: String): ProviderDiagnosticReport
 
     suspend fun ask(
         question: String?,

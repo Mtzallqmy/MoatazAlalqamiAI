@@ -44,6 +44,7 @@ import kai.composeapp.generated.resources.sandbox_session_chip_temporary
 import kai.composeapp.generated.resources.settings_sandbox_cancel
 import kai.composeapp.generated.resources.settings_sandbox_description
 import kai.composeapp.generated.resources.settings_sandbox_install
+import kai.composeapp.generated.resources.settings_sandbox_runtime_title
 import kai.composeapp.generated.resources.settings_sandbox_subtab_files
 import kai.composeapp.generated.resources.settings_sandbox_subtab_packages
 import kai.composeapp.generated.resources.settings_sandbox_subtab_terminal
@@ -115,7 +116,10 @@ internal fun SandboxTabsContent(
         Column(modifier = modifier.fillMaxWidth()) {
             SettingsCard {
                 Text(
-                    text = "Alpine Linux",
+                    text = stringResource(
+                        Res.string.settings_sandbox_runtime_title,
+                        sandboxState.distro.displayName,
+                    ),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onBackground,
                 )

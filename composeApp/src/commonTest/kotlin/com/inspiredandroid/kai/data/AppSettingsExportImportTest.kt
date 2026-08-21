@@ -100,7 +100,7 @@ class AppSettingsExportImportTest {
     }
 
     @Test
-    fun `export and import round-trips email settings`() {
+    fun `export and import round-trips email settings without plaintext password`() {
         val appSettings = createAppSettings()
         appSettings.setEmailEnabled(false)
         appSettings.setEmailAccountsJson("""[{"id":"acc1","email":"test@test.com"}]""")
@@ -114,7 +114,8 @@ class AppSettingsExportImportTest {
         target.importFromJson(json, toolIds)
         assertFalse(target.isEmailEnabled())
         assertTrue(target.getEmailAccountsJson().contains("acc1"))
-        assertEquals("secret123", target.getEmailPassword("acc1"))
+        assertEquals("", target.getEmailPassword("acc1"))
+        assertNull(json["email_passwords"])
         assertTrue(target.getEmailSyncStateJson("acc1").contains("42"))
         assertEquals(30, target.getEmailPollIntervalMinutes())
     }
@@ -138,7 +139,7 @@ class AppSettingsExportImportTest {
     }
 
     @Test
-    fun `export and import round-trips configured services and per-instance settings`() {
+    fun `export and import round-trips configured services without plaintext api keys`() {
         val appSettings = createAppSettings()
         appSettings.setConfiguredServiceInstances(
             listOf(
@@ -162,7 +163,9 @@ class AppSettingsExportImportTest {
         assertEquals("gemini", instances[1].instanceId)
         assertEquals(Service.OpenAI, target.currentService())
         assertFalse(target.isFreeFallbackEnabled())
-        assertEquals("sk-key", target.getInstanceApiKey("openai"))
+        assertEquals("", target.getInstanceApiKey("openai"))
+        assertTrue(json["secrets_omitted"]?.jsonPrimitive?.boolean == true)
+        assertFalse(json.toString().contains("sk-key"))
         assertEquals("gpt-4", target.getInstanceModelId("openai"))
         assertEquals("https://custom.url", target.getInstanceBaseUrl("gemini"))
     }
@@ -198,6 +201,21 @@ class AppSettingsExportImportTest {
         val target = createAppSettings()
         target.importFromJson(json, toolIds)
         assertTrue(target.getMcpServersJson().contains("srv1"))
+    }
+
+    @Test
+    fun `export removes sensitive MCP headers but preserves ordinary headers`() {
+        val appSettings = createAppSettings()
+        appSettings.setMcpServersJson(
+            """[{"id":"srv1","headers":{"Authorization":"Bearer canary","X-Region":"me","x-api-key":"canary-key"}}]""",
+        )
+
+        val json = appSettings.exportToJson(toolIds)
+        val exported = json["mcp_servers"].toString()
+
+        assertFalse(exported.contains("canary"))
+        assertTrue(exported.contains("X-Region"))
+        assertTrue(exported.contains("me"))
     }
 
     @Test

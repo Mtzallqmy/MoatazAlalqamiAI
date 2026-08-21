@@ -28,6 +28,10 @@
 - رفض أي URL يحوي `user:pass@` أو `?key=...` قبل الإرسال.
 - تبديل http→https للمزودات الإنتاجية.
 
+### 2.1.1 تشخيص المزود والنموذج
+
+زر **تشغيل التشخيص الكامل** هو probe صريح يستهلك طلبًا صغيرًا ولا يعمل دوريًا. ينفذ أربع مراحل منفصلة: المصادقة/الاتصال، اكتشاف النماذج، completion حقيقي للنموذج المختار، ثم function-call خامل باسم `moataz_runtime_probe`. لذلك لا تعني استجابة endpoint وحدها أن النموذج قادر على تنفيذ أدوات؛ واجهة الإعدادات تعرض صراحةً إما «جاهز للمحادثة وأدوات بيئة العمل» أو «محادثة فقط». لا تُحفظ مفاتيح API أو تُدرج في تقرير التشخيص.
+
 ### 2.2 ModelMetadata + Pricing
 `ModelCapabilityCatalog`: طبقة قدرات يدوية فوق `ModelCatalog` المكتشف — supportsVision، supportsToolCalling، supportsReasoning، isLocal، pricing لكل مليون توكن، speed/quality tiers.
 
@@ -42,14 +46,23 @@
 ### 2.5 UsageRecorder
 سجل طلبات (tokens، نجاح، تكلفة تقديرية) مع نافذة اليوم/الشهر وفحص سقف ميزانية شهري وسقف 5000 سجل.
 
+### 2.6 Live capabilities and provider boundaries
+
+`ProviderCapabilityProber` accepts a capability only with live interaction or
+live discovery evidence and records latency, usage and cost without request
+content. `ProviderTransferApprovalGate` is fail-closed: the real repository
+fallback loop cannot send conversation history to a different provider without
+an `ApprovedOnce` decision. Same-provider retries do not cross this boundary.
+
 ## 3. Agent Runtime (`agents/`)
 
-- **AgentRun** / **AgentStep**: كل خطوة (أداة/نص/موافقة) تُسجل مع cost وduration.
+- **AgentRun** / **AgentStep**: كل خطوة (أداة/نص/موافقة) تُسجل مع cost وduration وcheckpoint.
 - **ApprovalEngine**: `decide(toolId, risk, mode, args)`:
   - أداة مجهولة → `NeedsApproval` دائمًا (Anti-Injection).
   - `isDestructiveGit()` يحظر `reset --hard`، `clean -fd`، force push.
   - الأنماط: Safe (كل شيء)، Balanced (reads/writes محلي تلقائي)، Autonomous (كل شيء ما عدا Dangerous).
 - **AgentRunStore**: يحفظ runs وpending approvals في settings.
+- **AgentOrchestrator**: آلة حالات محدودة بالوقت والخطوات والتكلفة، مع cancellation وloop detection وretries محدودة. لا تقبل التسليم بعد تعديل المشروع إلا بعد test ناجح وdiff حقيقيين.
 
 ## 4. Security (`security/`)
 
@@ -66,9 +79,13 @@
 4. `RemoteDataRepository` يجلب apiKey من `ProviderCredentialsResolver` → Ktor/OkHttp → stream.
 5. `UsageRecorder.record()` + تحديث health عند أخطاء.
 
+### 5.1 محادثة التطوير وSandbox المباشر
+
+عندما تكون `execute_shell_command` متاحة، يضيف system prompt عقد `/workspace` فقط حين تُرسل الأداة فعليًا إلى النموذج. لكل محادثة Shell مستمرة مستقلة، بينما ملفات Debian و`/workspace` مشتركة مع Moataz Code. أوامر النموذج ومخرجاتها تضاف إلى transcript محفوظ وتظهر في `TerminalPanel` مباشرة داخل شاشة المحادثة، ويمكن للمستخدم تشغيل أمر وإلغائه من اللوحة نفسها. تدعم خدمة الاستيراد GitHub العام والخاص عبر HTTPS وأرشيفات ZIP/TAR المرفوعة، باستخدام staging ذري وحدود traversal/links/size/count.
+
 ## 6. Testing
 
-`composeApp/src/commonTest` — 450+ اختبارًا يغطي Gateway وRouter وApproval وUsage وMarkdown وغيرها، تُشغَّل عبر `:composeApp:testAndroid` (Android Host Test).
+يحتوي `commonTest` و`androidHostTest` حاليًا أكثر من 1000 إعلان اختبار. العدد لا يعني النجاح؛ الدليل المعتمد هو نتيجة `:composeApp:testAndroid` على commit المنشور.
 
 ## 7. Local development runtime
 

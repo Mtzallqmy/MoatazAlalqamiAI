@@ -6,7 +6,9 @@ import com.inspiredandroid.kai.DaemonController
 import com.inspiredandroid.kai.Platform
 import com.inspiredandroid.kai.currentPlatform
 import com.inspiredandroid.kai.data.DataRepository
+import com.inspiredandroid.kai.data.DiagnosticCheck
 import com.inspiredandroid.kai.data.ImportSection
+import com.inspiredandroid.kai.data.ProviderDiagnosticReport
 import com.inspiredandroid.kai.data.Service
 import com.inspiredandroid.kai.data.TaskScheduler
 import com.inspiredandroid.kai.data.ThemeMode
@@ -48,6 +50,7 @@ import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.collections.immutable.toPersistentSet
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -151,6 +154,7 @@ class SettingsViewModel(
         onChangeBaseUrl = ::onChangeBaseUrl,
         onSelectModel = ::onSelectModel,
         onRefreshModels = ::onRefreshModels,
+        onDiagnoseProvider = ::onDiagnoseProvider,
         onToggleUseCustomModel = ::onToggleUseCustomModel,
         onChangeCustomModelId = ::onChangeCustomModelId,
         onToggleTool = ::onToggleTool,
@@ -350,10 +354,14 @@ class SettingsViewModel(
 
     private fun refreshServiceList() {
         _state.update { current ->
-            val existingStatuses = current.configuredServices.associate { it.instanceId to it.connectionStatus }
+            val existingEntries = current.configuredServices.associateBy { it.instanceId }
             val newEntries = buildConfiguredServiceEntries().map { entry ->
-                val preservedStatus = existingStatuses[entry.instanceId]
-                if (preservedStatus != null) entry.copy(connectionStatus = preservedStatus) else entry
+                val previous = existingEntries[entry.instanceId]
+                if (previous != null) entry.copy(
+                    connectionStatus = previous.connectionStatus,
+                    isDiagnosing = previous.isDiagnosing,
+                    diagnostic = previous.diagnostic,
+                ) else entry
             }
             current.copy(
                 configuredServices = newEntries.toImmutableList(),
@@ -426,7 +434,7 @@ class SettingsViewModel(
             state.copy(
                 configuredServices = state.configuredServices.map { e ->
                     if (e.instanceId == instanceId) {
-                        e.copy(apiKey = apiKey, connectionStatus = ConnectionStatus.Unknown)
+                        e.copy(apiKey = apiKey, connectionStatus = ConnectionStatus.Unknown, diagnostic = null)
                     } else {
                         e
                     }
@@ -444,7 +452,7 @@ class SettingsViewModel(
             state.copy(
                 configuredServices = state.configuredServices.map { e ->
                     if (e.instanceId == instanceId) {
-                        e.copy(baseUrl = baseUrl, connectionStatus = ConnectionStatus.Unknown)
+                        e.copy(baseUrl = baseUrl, connectionStatus = ConnectionStatus.Unknown, diagnostic = null)
                     } else {
                         e
                     }
@@ -466,6 +474,56 @@ class SettingsViewModel(
         }
     }
 
+    private fun onDiagnoseProvider(instanceId: String) {
+        val target = _state.value.configuredServices.firstOrNull { it.instanceId == instanceId }
+            ?.takeUnless { it.isDiagnosing }
+            ?: return
+        _state.update { state ->
+            state.copy(configuredServices = state.configuredServices.map { entry ->
+                if (entry.instanceId == instanceId) entry.copy(isDiagnosing = true, diagnostic = null) else entry
+            }.toImmutableList())
+        }
+        viewModelScope.launch(backgroundDispatcher) {
+            var report: ProviderDiagnosticReport? = null
+            try {
+                report = dataRepository.diagnoseProvider(instanceId)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                val detail = safeProviderDiagnosticError(error)
+                report = ProviderDiagnosticReport(
+                    instanceId = instanceId,
+                    providerName = target.service.displayName,
+                    modelId = target.customModelId.takeIf { target.useCustomModel }.orEmpty()
+                        .ifBlank { target.selectedModel?.id.orEmpty() },
+                    endpoint = target.baseUrl,
+                    connection = DiagnosticCheck.failed(detail),
+                    modelDiscovery = DiagnosticCheck.skipped("Diagnostics did not complete"),
+                    chatCompletion = DiagnosticCheck.skipped("Diagnostics did not complete"),
+                    toolCalling = DiagnosticCheck.skipped("Diagnostics did not complete"),
+                    latencyMs = 0,
+                    checkedAtEpochMs = 0,
+                )
+            } finally {
+                _state.update { state ->
+                    state.copy(configuredServices = state.configuredServices.map { entry ->
+                        if (entry.instanceId == instanceId) {
+                            entry.copy(isDiagnosing = false, diagnostic = report ?: entry.diagnostic)
+                        } else {
+                            entry
+                        }
+                    }.toImmutableList())
+                }
+            }
+        }
+    }
+
+    /** Keep provider exceptions useful without echoing credentials into UI state. */
+    private fun safeProviderDiagnosticError(error: Exception): String {
+        val message = error.message?.takeIf { it.isNotBlank() } ?: "Provider diagnostics failed"
+        return com.inspiredandroid.kai.runtime.RuntimeDiagnosticRedactor.redact(message).take(500)
+    }
+
     private fun setRefreshingModels(instanceId: String, refreshing: Boolean) {
         _state.update { state ->
             state.copy(
@@ -476,10 +534,19 @@ class SettingsViewModel(
         }
     }
 
+    private fun clearDiagnostic(instanceId: String) {
+        _state.update { state ->
+            state.copy(configuredServices = state.configuredServices.map { entry ->
+                if (entry.instanceId == instanceId) entry.copy(diagnostic = null) else entry
+            }.toImmutableList())
+        }
+    }
+
     private fun onSelectModel(instanceId: String, modelId: String) {
         val entry = _state.value.configuredServices.find { it.instanceId == instanceId } ?: return
         dataRepository.updateInstanceSelectedModel(instanceId, entry.service, modelId)
         refreshInstanceModels(instanceId)
+        clearDiagnostic(instanceId)
     }
 
     private fun onToggleUseCustomModel(instanceId: String, useCustom: Boolean) {
@@ -498,6 +565,7 @@ class SettingsViewModel(
                 }.toImmutableList(),
             )
         }
+        clearDiagnostic(instanceId)
     }
 
     private fun onChangeCustomModelId(instanceId: String, modelId: String) {
@@ -509,6 +577,7 @@ class SettingsViewModel(
                 }.toImmutableList(),
             )
         }
+        clearDiagnostic(instanceId)
     }
 
     private fun onSaveSoul(text: String) {

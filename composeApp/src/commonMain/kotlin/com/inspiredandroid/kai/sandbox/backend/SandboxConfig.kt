@@ -38,7 +38,7 @@ enum class NetworkPolicy {
  * make it one-line-friendly for the orchestrator.
  */
 data class SandboxConfig(
-    val distro: LinuxDistro = LinuxDistro.UBUNTU,
+    val distro: LinuxDistro = LinuxDistro.DEBIAN,
     val resourceProfile: ResourceProfile = ResourceProfile.STANDARD,
     val networkPolicy: NetworkPolicy = NetworkPolicy.DEVELOPER,
     val workspaceRoot: String = "/workspace",

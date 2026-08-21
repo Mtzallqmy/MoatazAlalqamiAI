@@ -5,6 +5,7 @@ import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.EOFException
 import java.io.InputStream
 import java.util.zip.GZIPInputStream
 
@@ -117,16 +118,21 @@ object TarExtractor {
         while (true) {
             cancellationCheck()
             val headerBytesRead = readFully(inputStream, headerBuffer)
-            if (headerBytesRead < TAR_BLOCK_SIZE) break
+            if (headerBytesRead == 0) throw EOFException("Archive ended before the tar end marker")
+            if (headerBytesRead < TAR_BLOCK_SIZE) throw EOFException("Truncated tar header")
 
             val name = readTarString(headerBuffer, TAR_NAME_OFFSET, 100)
-            if (name.isEmpty()) break
+            if (name.isEmpty()) {
+                if (headerBuffer.any { it != 0.toByte() }) throw java.io.IOException("Invalid tar end marker")
+                break
+            }
 
             val prefix = readTarString(headerBuffer, TAR_PREFIX_OFFSET, 155)
             val fullName = if (prefix.isNotEmpty()) "$prefix/$name" else name
 
             val sizeStr = readTarString(headerBuffer, TAR_SIZE_OFFSET, 12)
             val size = if (sizeStr.isNotEmpty()) sizeStr.toLong(8) else 0L
+            if (size < 0) throw java.io.IOException("Negative tar entry size: $fullName")
 
             val modeStr = readTarString(headerBuffer, TAR_MODE_OFFSET, 8)
             val mode = if (modeStr.isNotEmpty()) modeStr.toInt(8) else 0
@@ -150,12 +156,14 @@ object TarExtractor {
 
             val outFile = File(targetDir, fullName)
             if (!isInside(targetCanonical, outFile.canonicalPath)) {
-                skipBytes(inputStream, alignToBlock(size))
-                continue
+                throw java.io.IOException("Archive entry escapes target directory: $fullName")
             }
 
             if (typeFlag == TAR_TYPE_REGULAR_LEGACY || type == TAR_TYPE_REGULAR) {
                 outFile.parentFile?.mkdirs()
+                if (java.nio.file.Files.isSymbolicLink(outFile.toPath())) {
+                    java.nio.file.Files.delete(outFile.toPath())
+                }
                 // LXC/Cloud rootfs sometimes emit a regular-file header for a
                 // path that already exists as a directory (duplicate entries /
                 // reordered listings) — that yields EISDIR on open. Remove it.
@@ -167,7 +175,7 @@ object TarExtractor {
                     while (remaining > 0) {
                         val toRead = minOf(remaining, dataBuffer.size.toLong()).toInt()
                         val bytesRead = inputStream.read(dataBuffer, 0, toRead)
-                        if (bytesRead <= 0) break
+                        if (bytesRead <= 0) throw EOFException("Truncated tar entry data: $fullName")
                         output.write(dataBuffer, 0, bytesRead)
                         remaining -= bytesRead
                     }
@@ -176,7 +184,7 @@ object TarExtractor {
                     outFile.setExecutable(true, false)
                 }
                 val padding = alignToBlock(size) - size
-                if (padding > 0) skipBytes(inputStream, padding)
+                if (padding > 0) skipFully(inputStream, padding, "padding for $fullName")
                 continue
             }
 
@@ -189,7 +197,9 @@ object TarExtractor {
                     // target tree so a crafted archive cannot escape via links.
                     if (safe) {
                         val resolved = safeLinkTarget(targetDir, outFile, linkName)
-                        if (resolved == null || !isInside(targetCanonical, resolved.canonicalPath)) continue
+                        if (resolved == null || !isInside(targetCanonical, resolved.canonicalPath)) {
+                            throw java.io.IOException("Unsafe symbolic link target: $fullName -> $linkName")
+                        }
                     }
                     // Relatively-targeted symlinks must be resolved against the
                     // link's own directory, not the archive root — a relative
@@ -225,11 +235,14 @@ object TarExtractor {
                 }
 
                 '1' -> {
-                    val linkTarget = safeLinkTarget(targetDir, outFile, linkName) ?: continue
+                    val linkTarget = safeLinkTarget(targetDir, outFile, linkName)
+                        ?: throw java.io.IOException("Unsafe hard link target: $fullName -> $linkName")
                     outFile.parentFile?.mkdirs()
                     // Hard link must also resolve inside the target tree (defends
                     // against a crafted archive linking to an absolute host path).
-                    if (!isInside(targetCanonical, linkTarget.canonicalPath)) continue
+                    if (!isInside(targetCanonical, linkTarget.canonicalPath)) {
+                        throw java.io.IOException("Unsafe hard link target: $fullName -> $linkName")
+                    }
                     if (linkTarget.exists()) {
                         linkTarget.copyTo(outFile, overwrite = true)
                     }
@@ -239,7 +252,7 @@ object TarExtractor {
             }
 
             // Non-file entries (long-name headers, pax records) still carry a body.
-            if (size > 0) skipBytes(inputStream, alignToBlock(size))
+            if (size > 0) skipFully(inputStream, alignToBlock(size), "body for $fullName")
         }
     }
 
@@ -272,12 +285,12 @@ object TarExtractor {
         return totalRead
     }
 
-    private fun skipBytes(inputStream: InputStream, count: Long) {
+    private fun skipFully(inputStream: InputStream, count: Long, description: String) {
         var remaining = count
         while (remaining > 0) {
             val skipped = inputStream.skip(remaining)
             if (skipped <= 0) {
-                if (inputStream.read() < 0) break
+                if (inputStream.read() < 0) throw EOFException("Truncated tar $description")
                 remaining -= 1
             } else {
                 remaining -= skipped

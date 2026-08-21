@@ -88,4 +88,31 @@ class ApprovalEngineTest {
         val decision = engine().decide("push_changes", ToolRisk.Dangerous, ApprovalMode.Autonomous, """{"force":false}""")
         assertTrue(decision is ApprovalDecision.NeedsApproval)
     }
+
+    @Test
+    fun `new network and package tiers always require explicit approval`() {
+        assertTrue(engine().decide("search_web", ToolRisk.Network, ApprovalMode.Autonomous, "{}") is ApprovalDecision.NeedsApproval)
+        assertTrue(engine().decide("run_command", ToolRisk.PackageInstall, ApprovalMode.Autonomous, "{}") is ApprovalDecision.NeedsApproval)
+    }
+
+    @Test
+    fun `push and deploy commands are classified as external effects`() {
+        assertEquals(
+            ToolRisk.ExternalEffect,
+            ApprovalEngine.classifyCommandRisk("terminal.exec", """{"command":"git push origin main"}""", ToolRisk.WorkspaceWrite),
+        )
+        assertEquals(
+            ToolRisk.ExternalEffect,
+            ApprovalEngine.classifyCommandRisk("terminal.exec", """{"command":"deploy production"}""", ToolRisk.WorkspaceWrite),
+        )
+    }
+
+    @Test
+    fun `delete and writes outside workspace are elevated to destructive`() {
+        assertEquals(ToolRisk.Destructive, ApprovalEngine.classifyCommandRisk("fs.delete", "{}", ToolRisk.WorkspaceWrite))
+        assertEquals(
+            ToolRisk.Destructive,
+            ApprovalEngine.classifyCommandRisk("fs.write", """{"path":"/etc/profile"}""", ToolRisk.WorkspaceWrite),
+        )
+    }
 }

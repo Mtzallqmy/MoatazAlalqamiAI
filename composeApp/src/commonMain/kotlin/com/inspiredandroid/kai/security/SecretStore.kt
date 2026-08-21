@@ -49,6 +49,8 @@ object SecretKeys {
     private const val PROVIDER_NS = "provider"
     private const val GITHUB_NS = "github"
     private const val TELEGRAM_NS = "telegram"
+    private const val EMAIL_NS = "email"
+    private const val MCP_NS = "mcp"
 
     fun providerApiKey(providerInstanceId: String): String = "$PROVIDER_NS.$providerInstanceId"
 
@@ -60,4 +62,7 @@ object SecretKeys {
     fun githubRefreshToken(accountId: String): String = "$GITHUB_NS.refresh.$accountId"
 
     fun telegramBotToken(): String = "$TELEGRAM_NS.bot_token"
+    fun emailPassword(accountId: String): String = "$EMAIL_NS.password.$accountId"
+    fun mcpHeader(serverId: String, headerName: String): String =
+        "$MCP_NS.$serverId.header.${headerName.lowercase()}"
 }

@@ -14,7 +14,16 @@ object MoatazRuntimeContract {
         "bash", "sh", "git", "curl", "wget", "tar", "xz", "python3",
         "ps", "pgrep", "pkill", "jq", "rg", "ssh", "rsync", "file", "sha256sum",
     )
+
+    const val requiredEmbeddedAgent = "opencode"
 }
+
+@Serializable
+data class RootfsAssetPart(
+    val name: String,
+    val sha256: String,
+    val sizeBytes: Long,
+)
 
 @Serializable
 data class RootfsManifest(
@@ -27,15 +36,20 @@ data class RootfsManifest(
     val sha256: String,
     val requiredCli: List<String>,
     val createdAt: String,
+    val assetParts: List<RootfsAssetPart> = emptyList(),
+    val embeddedCli: Map<String, String> = emptyMap(),
 ) {
     fun isProductionRuntime(): Boolean =
-        schemaVersion == 1 &&
+        schemaVersion == 2 &&
             distro == MoatazRuntimeContract.distro &&
             version.substringBefore('.').toIntOrNull() == MoatazRuntimeContract.versionMajor &&
             codename == MoatazRuntimeContract.codename &&
             architecture == MoatazRuntimeContract.architecture &&
             sha256.matches(Regex("[0-9a-f]{64}")) &&
-            requiredCli.containsAll(MoatazRuntimeContract.requiredCli)
+            requiredCli.containsAll(MoatazRuntimeContract.requiredCli) &&
+            assetParts.isNotEmpty() &&
+            assetParts.all { it.name.isNotBlank() && it.sha256.matches(Regex("[0-9a-f]{64}")) && it.sizeBytes > 0 } &&
+            !embeddedCli[MoatazRuntimeContract.requiredEmbeddedAgent].isNullOrBlank()
 }
 
 data class OsRelease(
@@ -100,6 +114,10 @@ sealed interface EnvironmentIssue {
         override val code = "boot_probe_failed"
         override val repairable = true
     }
+    data class AgentBinaryBroken(override val detail: String) : EnvironmentIssue {
+        override val code = "agent_binary_broken"
+        override val repairable = true
+    }
 }
 
 enum class EnvironmentHealthStatus { Healthy, Degraded, Broken }
@@ -138,7 +156,7 @@ data class EnvironmentRepairPlan(
 
 object EnvironmentRepairPlanner {
     fun plan(health: EnvironmentHealth): EnvironmentRepairPlan {
-        val actions = buildList {
+        val plannedActions = buildList {
             val missingPackages = health.issues.filterIsInstance<EnvironmentIssue.MissingCli>()
                 .map { executableToPackage(it.executable) }.distinct()
             if (missingPackages.isNotEmpty()) add(EnvironmentRepairAction.InstallPackages(missingPackages))
@@ -146,15 +164,28 @@ object EnvironmentRepairPlanner {
             if (health.issues.any { it is EnvironmentIssue.WorkspaceMountMissing }) add(EnvironmentRepairAction.RestoreWorkspaceMounts)
             if (health.issues.any { it is EnvironmentIssue.MissingNative }) add(EnvironmentRepairAction.RestoreNativeRuntime)
             if (health.issues.any {
+                    it is EnvironmentIssue.BootProbeFailed ||
+                        it is EnvironmentIssue.PtyUnavailable ||
+                        it is EnvironmentIssue.AgentBinaryBroken
+                }
+            ) {
+                add(EnvironmentRepairAction.ReinstallRuntimePreservingProjects)
+            }
+            if (health.issues.any {
                     it is EnvironmentIssue.WrongArchitecture ||
                         it is EnvironmentIssue.WrongDistro ||
                         it is EnvironmentIssue.OldDebianVersion
                 }
             ) add(EnvironmentRepairAction.ReinstallRuntimePreservingProjects)
+        }.distinct().toMutableList()
+        // EnvironmentIssue is sealed today, but keep the planner fail-safe as it
+        // grows: a broken/degraded health report must never produce a no-op Repair.
+        if (health.issues.isNotEmpty() && plannedActions.isEmpty()) {
+            plannedActions += EnvironmentRepairAction.ReinstallRuntimePreservingProjects
         }
         return EnvironmentRepairPlan(
-            actions = actions,
-            requiresReinstall = actions.any { it is EnvironmentRepairAction.ReinstallRuntimePreservingProjects },
+            actions = plannedActions,
+            requiresReinstall = plannedActions.any { it is EnvironmentRepairAction.ReinstallRuntimePreservingProjects },
         )
     }
 

@@ -28,6 +28,11 @@ object AptPackageManager : PackageManagerSpec {
     // X11 and systemd dependencies it can never use.
     override fun installCommand(name: String): String = "apt-get install -y --no-install-recommends ${shellQuote(name)}"
 
+    override fun installCommand(names: List<String>): String {
+        require(names.isNotEmpty()) { "At least one package is required" }
+        return "apt-get install -y --no-install-recommends ${names.joinToString(" ") { shellQuote(it) }}"
+    }
+
     override fun removeCommand(name: String): String = "apt-get remove -y ${shellQuote(name)}"
 
     override fun parseInstalled(raw: String): List<PackageEntry> = raw.lineSequence()

@@ -23,18 +23,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import com.inspiredandroid.kai.formatFileSize
 import com.inspiredandroid.kai.linux.LinuxDistro
+import com.inspiredandroid.kai.runtime.RuntimeDiagnosticsStore
 import com.inspiredandroid.kai.ui.handCursor
 import com.inspiredandroid.kai.ui.sandbox.SandboxProgressRow
 import kai.composeapp.generated.resources.Res
 import kai.composeapp.generated.resources.settings_sandbox_cancel
 import kai.composeapp.generated.resources.settings_sandbox_description
 import kai.composeapp.generated.resources.settings_sandbox_disk_usage
+import kai.composeapp.generated.resources.settings_sandbox_copy_diagnostics
 import kai.composeapp.generated.resources.settings_sandbox_distro_alpine
-import kai.composeapp.generated.resources.settings_sandbox_distro_alpine_detail
 import kai.composeapp.generated.resources.settings_sandbox_distro_alpine_installed
 import kai.composeapp.generated.resources.settings_sandbox_distro_debian
 import kai.composeapp.generated.resources.settings_sandbox_distro_debian_detail
@@ -62,6 +65,7 @@ internal fun SandboxSettingsCard(
     onMigrateHome: () -> Unit,
 ) {
     var showResetDialog by remember { mutableStateOf(false) }
+    val clipboard = LocalClipboardManager.current
     SettingsCard {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -174,6 +178,21 @@ internal fun SandboxSettingsCard(
                 }
             }
         }
+
+        if (!sandboxState.isWorking && (sandboxState.sandboxInstalled || sandboxState.hasError)) {
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = {
+                    val diagnostics = RuntimeDiagnosticsStore.exportText().ifBlank {
+                        "Moataz Runtime: no diagnostic events recorded"
+                    }
+                    clipboard.setText(AnnotatedString(diagnostics))
+                },
+                modifier = Modifier.handCursor(),
+            ) {
+                Text(stringResource(Res.string.settings_sandbox_copy_diagnostics))
+            }
+        }
     }
 
     if (showResetDialog) {
@@ -239,28 +258,27 @@ private fun DistroPicker(
             selected = selected == LinuxDistro.DEBIAN,
             onSelect = onSelect,
         )
-        DistroOption(
-            distro = LinuxDistro.ALPINE,
-            title = stringResource(Res.string.settings_sandbox_distro_alpine),
-            detail = if (LinuxDistro.ALPINE in installed) {
-                stringResource(Res.string.settings_sandbox_distro_alpine_installed)
-            } else {
-                stringResource(Res.string.settings_sandbox_distro_alpine_detail)
-            },
-            selected = selected == LinuxDistro.ALPINE,
-            onSelect = onSelect,
-        )
-        DistroOption(
-            distro = LinuxDistro.UBUNTU,
-            title = "Ubuntu 26.04 LTS (resolute)",
-            detail = if (LinuxDistro.UBUNTU in installed) {
-                "Installed with OpenCode agent built in"
-            } else {
-                "Default agentic environment — Ubuntu LTS + build tools + embedded OpenCode agent"
-            },
-            selected = selected == LinuxDistro.UBUNTU,
-            onSelect = onSelect,
-        )
+        // Compatibility runtimes are switchable only when an upgrade already
+        // has them on disk. Fresh installs expose the single production Debian
+        // contract and cannot accidentally enter the old Alpine/Ubuntu flows.
+        if (LinuxDistro.ALPINE in installed) {
+            DistroOption(
+                distro = LinuxDistro.ALPINE,
+                title = stringResource(Res.string.settings_sandbox_distro_alpine),
+                detail = stringResource(Res.string.settings_sandbox_distro_alpine_installed),
+                selected = selected == LinuxDistro.ALPINE,
+                onSelect = onSelect,
+            )
+        }
+        if (LinuxDistro.UBUNTU in installed) {
+            DistroOption(
+                distro = LinuxDistro.UBUNTU,
+                title = "Ubuntu 26.04 LTS (experimental)",
+                detail = "Experimental compatibility runtime installed",
+                selected = selected == LinuxDistro.UBUNTU,
+                onSelect = onSelect,
+            )
+        }
     }
 }
 

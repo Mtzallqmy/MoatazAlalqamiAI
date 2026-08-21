@@ -24,6 +24,9 @@ fun AppSettings.exportToJson(
 ): JsonObject {
     val map = mutableMapOf<String, JsonElement>()
     map["version"] = JsonPrimitive(1)
+    // Settings exports are ordinary JSON files and therefore never contain
+    // credentials. Legacy v1 imports may still contain them and remain readable.
+    map["secrets_omitted"] = JsonPrimitive(true)
 
     if (ImportSection.SERVICES in sections) {
         val configuredJson = settings.getString(KEY_CONFIGURED_SERVICES, "")
@@ -40,20 +43,6 @@ fun AppSettings.exportToJson(
                     JsonObject(
                         buildMap {
                             put("instanceId", JsonPrimitive(instance.instanceId))
-                            // Secrets are exported from the encrypted vault, never
-                            // from legacy plaintext slots. If the vault is not
-                            // available (tests), the key is simply omitted — a
-                            // secret that cannot be exported securely is not
-                            // exported at all.
-                            val secretKey = com.inspiredandroid.kai.security.SecretKeys.instanceApiKey(instance.instanceId)
-                            var apiKey = kotlinx.coroutines.runBlocking {
-                                runCatching { com.inspiredandroid.kai.security.SecretStoreHolder.store?.get(secretKey) }.getOrNull()
-                            }.orEmpty()
-                            // Legacy plaintext slot: still read for round-trip compatibility with
-                            // data written before the vault existed (e.g. old settings imports),
-                            // but never *written* back there by this module.
-                            if (apiKey.isBlank()) apiKey = getInstanceApiKey(instance.instanceId)
-                            if (apiKey.isNotBlank()) put("api_key", JsonPrimitive(apiKey))
                             val modelId = getInstanceModelId(instance.instanceId)
                             if (modelId.isNotBlank()) put("model_id", JsonPrimitive(modelId))
                             val baseUrl = getInstanceBaseUrl(instance.instanceId)
@@ -114,16 +103,12 @@ fun AppSettings.exportToJson(
             map["email_accounts"] = Json.parseToJsonElement(emailAccountsJson)
             try {
                 val accounts = Json.parseToJsonElement(emailAccountsJson).jsonArray
-                val passwords = mutableMapOf<String, JsonElement>()
                 val syncStates = mutableMapOf<String, JsonElement>()
                 for (account in accounts) {
                     val id = account.jsonObject["id"]?.jsonPrimitive?.content ?: continue
-                    val password = getEmailPassword(id)
-                    if (password.isNotBlank()) passwords[id] = JsonPrimitive(password)
                     val syncState = getEmailSyncStateJson(id)
                     if (syncState.isNotBlank()) syncStates[id] = Json.parseToJsonElement(syncState)
                 }
-                if (passwords.isNotEmpty()) map["email_passwords"] = JsonObject(passwords)
                 if (syncStates.isNotEmpty()) map["email_sync_states"] = JsonObject(syncStates)
             } catch (_: Exception) {
             }
@@ -164,7 +149,7 @@ fun AppSettings.exportToJson(
     if (ImportSection.MCP in sections) {
         val mcpJson = getMcpServersJson()
         if (mcpJson.isNotBlank()) {
-            map["mcp_servers"] = Json.parseToJsonElement(mcpJson)
+            map["mcp_servers"] = sanitizeMcpServersForExport(Json.parseToJsonElement(mcpJson))
         }
     }
 
@@ -176,6 +161,20 @@ fun AppSettings.exportToJson(
     }
 
     return JsonObject(map)
+}
+
+private val sensitiveMcpHeader = Regex("(?i)^(authorization|proxy-authorization|x-api-key|api-key|.*token.*|.*secret.*|.*password.*)$")
+
+/** Keeps server configuration while removing credential-bearing header values. */
+private fun sanitizeMcpServersForExport(element: JsonElement): JsonElement {
+    val servers = element as? JsonArray ?: return element
+    return JsonArray(servers.map { serverElement ->
+        val server = serverElement as? JsonObject ?: return@map serverElement
+        val headers = server["headers"] as? JsonObject ?: return@map server
+        JsonObject(server.toMutableMap().apply {
+            put("headers", JsonObject(headers.filterKeys { !sensitiveMcpHeader.matches(it) }))
+        })
+    })
 }
 
 fun AppSettings.importFromJson(

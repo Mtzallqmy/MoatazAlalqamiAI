@@ -10,6 +10,7 @@ import com.inspiredandroid.kai.data.ConversationStorage
 import com.inspiredandroid.kai.linux.DistroSpec
 import com.inspiredandroid.kai.linux.GuestFileMap
 import com.inspiredandroid.kai.linux.HomeMigration
+import com.inspiredandroid.kai.linux.EnvironmentDoctor
 import com.inspiredandroid.kai.linux.InstallMarker
 import com.inspiredandroid.kai.linux.InstallStep
 import com.inspiredandroid.kai.linux.LinuxDistro
@@ -17,6 +18,8 @@ import com.inspiredandroid.kai.linux.LinuxInstaller
 import com.inspiredandroid.kai.linux.LinuxInstalls
 import com.inspiredandroid.kai.linux.LinuxPaths
 import com.inspiredandroid.kai.linux.ProotLauncher
+import com.inspiredandroid.kai.runtime.RuntimeDiagnosticEvent
+import com.inspiredandroid.kai.runtime.RuntimeDiagnosticsSink
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -61,9 +64,13 @@ class LinuxSandboxManager(
      * has never had — so an install sitting in the chat sandbox's own directory
      * counts as the choice until the user makes a different one.
      */
-    private fun initialSelection(): LinuxDistro = appSettings.getSandboxDistroOrNull()
-        ?: installs.distroInSandboxDir()
-        ?: LinuxDistro.DEFAULT
+    private fun initialSelection(): LinuxDistro {
+        val requested = appSettings.getSandboxDistroOrNull() ?: installs.distroInSandboxDir()
+        // Do not let an old preference point a fresh install back to an
+        // experimental distro. A completed legacy install remains selectable.
+        return requested?.takeIf { it == LinuxDistro.DEFAULT || it in installs.installed() }
+            ?: LinuxDistro.DEFAULT
+    }
 
     /**
      * Storage for [selected]'s install. Re-pointed by [selectDistro] rather than
@@ -139,10 +146,31 @@ class LinuxSandboxManager(
     private fun checkExistingInstallation() {
         marker = paths.readMarker()
         val proot = File(prootPath)
-        _state.value = if (marker != null && proot.exists() && proot.canExecute()) {
-            SandboxState.Ready
-        } else {
-            SandboxState.NotInstalled
+        val installed = marker
+        if (installed == null || !proot.exists() || !proot.canExecute()) {
+            _state.value = SandboxState.NotInstalled
+            return
+        }
+        if (installed.distro != LinuxDistro.DEBIAN) {
+            // Legacy Ubuntu/Alpine installs remain on disk for migration and
+            // compatibility, but they do not satisfy the production Debian 13
+            // health contract. Never label an unprobed compatibility image Ready.
+            _state.value = SandboxState.Error(
+                "${installed.distro.displayName} is a compatibility runtime and was not health-verified. " +
+                    "Select Debian 13 to use Moataz Runtime; existing projects are preserved.",
+            )
+            return
+        }
+        _state.value = SandboxState.Installing("Checking Moataz Runtime...")
+        currentJob = scope.launch {
+            val health = EnvironmentDoctor(paths).diagnose()
+            _state.value = if (health.isReady) {
+                SandboxState.Ready
+            } else {
+                SandboxState.Error(
+                    health.issues.joinToString("\n") { "${it.code}: ${it.detail}" },
+                )
+            }
         }
     }
 
@@ -229,14 +257,24 @@ class LinuxSandboxManager(
         val target = selected
         val installer = installer()
         currentJob = scope.launch {
+            val started = System.nanoTime()
             try {
                 val installed = installer.install(target) { step -> _state.value = step.toSandboxState() }
                 marker = installed
                 _state.value = SandboxState.Ready
+                RuntimeDiagnosticsSink.Shared.record(
+                    RuntimeDiagnosticEvent("install_total", null, 0, (System.nanoTime() - started) / 1_000_000, null, null),
+                )
             } catch (e: kotlinx.coroutines.CancellationException) {
+                RuntimeDiagnosticsSink.Shared.record(
+                    RuntimeDiagnosticEvent("install_total", null, null, (System.nanoTime() - started) / 1_000_000, null, "cancelled"),
+                )
                 checkExistingInstallation()
             } catch (e: Exception) {
                 android.util.Log.e("LinuxSandbox", "Setup failed", e)
+                RuntimeDiagnosticsSink.Shared.record(
+                    RuntimeDiagnosticEvent("install_total", null, null, (System.nanoTime() - started) / 1_000_000, null, e.message),
+                )
                 marker = paths.readMarker()
                 _state.value = SandboxState.Error(e.message ?: "Setup failed")
             }
@@ -279,6 +317,7 @@ class LinuxSandboxManager(
             // no Kai Build behind it and the mount point would be a stray folder.
             if (current.distro == LinuxDistro.DEBIAN) {
                 paths.ensureMountPoints()
+                add(paths.projectsDir.absolutePath to "/workspace")
                 add(paths.projectsDir.absolutePath to "/root/projects")
             }
         }

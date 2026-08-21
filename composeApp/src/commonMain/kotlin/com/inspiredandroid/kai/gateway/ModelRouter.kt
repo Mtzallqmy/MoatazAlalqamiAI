@@ -89,6 +89,7 @@ data class RoutingDecision(
 class ModelRouter(
     settings: AppSettings,
     private val health: ProviderHealthRegistry,
+    private val liveCapabilities: ProviderCapabilityRegistry? = null,
 ) {
     private val settings: Settings = settings.settings
 
@@ -101,6 +102,7 @@ class ModelRouter(
         profileId: RoutingProfileId = currentProfile().profileId,
         configuredInstances: List<String>,
         instanceServiceIds: Map<String, String>,
+        requiresStreaming: Boolean = false,
     ): RoutingDecision {
         val config = currentProfile()
         val capabilities = buildCapabilitiesFilter(taskType, hasVisionInput, requiresTools)
@@ -113,6 +115,7 @@ class ModelRouter(
                 capabilities = capabilities,
                 contextTokens = contextTokens,
                 config = config,
+                requiresStreaming = requiresStreaming,
             )
         }
 
@@ -158,9 +161,10 @@ class ModelRouter(
         profileId: RoutingProfileId = currentProfile().profileId,
         configuredInstances: List<String>,
         instanceServiceIds: Map<String, String>,
+        requiresStreaming: Boolean = false,
     ): ModelCandidate? =
         selectAllCandidates(taskType, hasVisionInput, requiresTools, contextTokens,
-            profileId, configuredInstances, instanceServiceIds).primary
+            profileId, configuredInstances, instanceServiceIds, requiresStreaming).primary
 
     private fun scoreInstance(
         instanceId: String,
@@ -169,6 +173,7 @@ class ModelRouter(
         capabilities: Set<String>,
         contextTokens: Int,
         config: RoutingProfileConfig,
+        requiresStreaming: Boolean,
     ): ModelCandidate? {
         val rejection = mutableListOf<String>()
         var score = 0.0
@@ -176,25 +181,32 @@ class ModelRouter(
         val configForService = resolveConfigForService(config, serviceId)
         val explicit = modelForTaskType(configForService, taskType)
 
-        // Explicit per-task model wins outright.
-        if (explicit != null) {
-            return ModelCandidate(
-                modelId = explicit,
-                providerInstanceId = instanceId,
-                profileId = config.profileId,
-                score = 100.0,
-            )
-        }
-
-        val curated = ModelCapabilityCatalog.lookup(modelForService(serviceId))
+        // An explicit model wins scoring, but never bypasses capability, health,
+        // privacy, context, or budget constraints.
+        val selectedModelId = explicit ?: modelForService(serviceId)
+        val curated = ModelCapabilityCatalog.lookup(selectedModelId)
+        val observed = liveCapabilities?.reportFor(instanceId, selectedModelId)
 
         // --- Hard constraints ---
-        if (capabilities.contains("vision") && curated?.supportsVision != true) {
+        val legacyExplicitFallback = explicit != null && observed == null
+        if (capabilities.contains("vision") && observedSupport(
+                observed, GatewayCapability.Vision,
+                curated?.supportsVision ?: legacyExplicitFallback,
+            ) != true
+        ) {
             rejection += "no_vision"
         }
-        if (capabilities.contains("tools") && curated?.supportsToolCalling != true) {
+        if (capabilities.contains("tools") && observedSupport(
+                observed, GatewayCapability.Tools,
+                curated?.supportsToolCalling ?: legacyExplicitFallback,
+            ) != true
+        ) {
             rejection += "no_tools"
         }
+        if (requiresStreaming && observedSupport(observed, GatewayCapability.Streaming, fallback = null) != true) {
+            rejection += "no_streaming"
+        }
+        if (observed?.contextLimitTokens?.let { contextTokens > it } == true) rejection += "context_exceeded"
         if (curated?.isLocal != true && config.profileId == RoutingProfileId.PrivacyLocalOnly) {
             rejection += "cloud_blocked"
         }
@@ -214,7 +226,7 @@ class ModelRouter(
         val speed = 6 - (curated?.speedTier ?: 3) // invert: tier 1 fastest → 5 points
         val costBonus = if (estimatedCost == 0.0) 2.0 else -estimatedCost
 
-        score += when (config.profileId) {
+        score += if (explicit != null) 100.0 else when (config.profileId) {
             RoutingProfileId.MaximumQuality -> quality * 4.0 + costBonus
             RoutingProfileId.Fast -> speed * 3.0 + quality * 1.0
             RoutingProfileId.Economy -> costBonus * 5 + speed * 2.0
@@ -229,7 +241,7 @@ class ModelRouter(
         }
 
         return ModelCandidate(
-            modelId = modelForService(serviceId),
+            modelId = selectedModelId,
             providerInstanceId = instanceId,
             profileId = config.profileId,
             score = score,
@@ -276,6 +288,19 @@ class ModelRouter(
         return input + output
     }
 
+    private fun observedSupport(
+        report: ProviderCapabilityReport?,
+        capability: GatewayCapability,
+        fallback: Boolean?,
+    ): Boolean? {
+        val result = report?.results?.get(capability) ?: return fallback
+        return when (result.state) {
+            CapabilityProbeState.Supported -> result.evidence != CapabilityEvidence.None
+            CapabilityProbeState.Unsupported, CapabilityProbeState.Failed -> false
+            CapabilityProbeState.Skipped -> fallback
+        }
+    }
+
     // ------------------------------------------------------------------
     // Profile persistence
     // ------------------------------------------------------------------
@@ -307,7 +332,8 @@ class ModelRouter(
         private const val KEY_ROUTING_PROFILE = "routing_profile_config"
         private const val KEY_PROJECT_ROUTING_PREFIX = "project_routing_profile_"
         private val HARD_REJECTION_REASONS = setOf(
-            "no_vision", "no_tools", "cloud_blocked", "blocked", "not_allowed", "over_budget",
+            "no_vision", "no_tools", "no_streaming", "context_exceeded",
+            "cloud_blocked", "blocked", "not_allowed", "over_budget",
         )
     }
 }

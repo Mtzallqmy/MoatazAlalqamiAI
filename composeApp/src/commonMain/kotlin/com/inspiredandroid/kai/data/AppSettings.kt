@@ -435,14 +435,41 @@ class AppSettings(internal val settings: Settings) {
         settings.putString(KEY_EMAIL_ACCOUNTS, json)
     }
 
-    fun getEmailPassword(accountId: String): String = settings.getString("${KEY_EMAIL_PASSWORD_PREFIX}$accountId", "")
+    fun getEmailPassword(accountId: String): String {
+        val key = com.inspiredandroid.kai.security.SecretKeys.emailPassword(accountId)
+        val store = com.inspiredandroid.kai.security.SecretStoreHolder.store
+        val secure = if (store == null) "" else kotlinx.coroutines.runBlocking { store.get(key) }.orEmpty()
+        if (secure.isNotBlank()) return secure
+
+        // One-shot compatibility migration from releases that stored email
+        // passwords in SharedPreferences. Keep the fallback for non-Android tests.
+        val legacyKey = "${KEY_EMAIL_PASSWORD_PREFIX}$accountId"
+        val legacy = settings.getString(legacyKey, "")
+        if (legacy.isNotBlank() && store != null) {
+            kotlinx.coroutines.runBlocking { store.put(key, legacy) }
+            settings.remove(legacyKey)
+        }
+        return legacy
+    }
 
     fun setEmailPassword(accountId: String, password: String) {
-        settings.putString("${KEY_EMAIL_PASSWORD_PREFIX}$accountId", password)
+        val legacyKey = "${KEY_EMAIL_PASSWORD_PREFIX}$accountId"
+        val store = com.inspiredandroid.kai.security.SecretStoreHolder.store
+        if (store == null) {
+            settings.putString(legacyKey, password)
+            return
+        }
+        val key = com.inspiredandroid.kai.security.SecretKeys.emailPassword(accountId)
+        kotlinx.coroutines.runBlocking {
+            if (password.isBlank()) store.remove(key) else store.put(key, password)
+        }
+        settings.remove(legacyKey)
     }
 
     fun removeEmailPassword(accountId: String) {
         settings.remove("${KEY_EMAIL_PASSWORD_PREFIX}$accountId")
+        val key = com.inspiredandroid.kai.security.SecretKeys.emailPassword(accountId)
+        kotlinx.coroutines.runBlocking { com.inspiredandroid.kai.security.SecretStoreHolder.store?.remove(key) }
     }
 
     fun getEmailSyncStateJson(accountId: String): String = settings.getString("${KEY_EMAIL_SYNC_PREFIX}$accountId", "")

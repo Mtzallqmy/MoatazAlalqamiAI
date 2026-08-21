@@ -17,6 +17,11 @@ object ApkPackageManager : PackageManagerSpec {
 
     override fun installCommand(name: String): String = "apk add --no-cache ${shellQuote(name)}"
 
+    override fun installCommand(names: List<String>): String {
+        require(names.isNotEmpty()) { "At least one package is required" }
+        return "apk add --no-cache ${names.joinToString(" ") { shellQuote(it) }}"
+    }
+
     override fun removeCommand(name: String): String = "apk del ${shellQuote(name)}"
 
     override fun parseInstalled(raw: String): List<PackageEntry> = raw.lineSequence()

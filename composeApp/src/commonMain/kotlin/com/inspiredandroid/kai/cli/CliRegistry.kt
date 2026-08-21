@@ -83,7 +83,7 @@ class CliInstaller(
 ) {
     fun install(definition: CliDefinition): CliStatus {
         val command = when (val strategy = definition.install) {
-            is InstallStrategy.Apt -> "apt-get install -y -- ${strategy.packages.joinToString(" ")}"
+            is InstallStrategy.Apt -> "apt-get install -y -- ${strategy.packages.joinToString(" ") { shellArg(it) }}"
             is InstallStrategy.Npm -> "npm install -g -- ${strategy.packageName}"
             is InstallStrategy.Pipx -> "pipx install -- ${strategy.packageName}"
             is InstallStrategy.Cargo -> "cargo install --locked -- ${strategy.crate}"
@@ -115,6 +115,8 @@ class CliInstaller(
         if (!url.startsWith("https://")) return null
         return url.removePrefix("https://").substringBefore('/').substringBefore(':').takeIf { it.isNotBlank() }
     }
+
+    private fun shellArg(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 }
 
 fun defaultCliDefinitions(): List<CliDefinition> = listOf(

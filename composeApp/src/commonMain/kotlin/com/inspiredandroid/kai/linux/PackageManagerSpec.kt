@@ -34,6 +34,9 @@ interface PackageManagerSpec {
 
     fun installCommand(name: String): String
 
+    /** Installs several package names without collapsing them into one shell argument. */
+    fun installCommand(names: List<String>): String = names.joinToString(" && ") { installCommand(it) }
+
     fun removeCommand(name: String): String
 
     fun parseInstalled(raw: String): List<PackageEntry>

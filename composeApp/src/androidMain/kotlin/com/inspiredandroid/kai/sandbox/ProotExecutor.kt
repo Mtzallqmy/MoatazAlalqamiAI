@@ -31,7 +31,7 @@ class ProotExecutor(private val launcher: ProotLauncher) {
         commands: List<String>,
         timeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS,
         maxAttempts: Int = 2,
-        workingDir: String = "/root",
+        workingDir: String = "/workspace",
         extraEnv: Map<String, String> = emptyMap(),
     ): Map<String, Any> {
         var lastResult: Map<String, Any> = mapOf("success" to false, "error" to "No commands provided")
@@ -49,8 +49,9 @@ class ProotExecutor(private val launcher: ProotLauncher) {
     fun execute(
         command: String,
         timeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS,
-        workingDir: String = "/root",
+        workingDir: String = "/workspace",
         extraEnv: Map<String, String> = emptyMap(),
+        maxOutputChars: Int = MAX_OUTPUT_LENGTH,
     ): Map<String, Any> {
         require(workingDir.isWithinSandbox()) {
             "Refusing working directory outside the sandbox: $workingDir"
@@ -60,7 +61,7 @@ class ProotExecutor(private val launcher: ProotLauncher) {
             timeoutSeconds = timeoutSeconds.coerceIn(1, MAX_TIMEOUT_SECONDS),
             workingDir = workingDir,
             extraEnv = extraEnv,
-            maxOutputChars = MAX_OUTPUT_LENGTH,
+            maxOutputChars = maxOutputChars.coerceIn(1, 2_000_000),
         )
         if (!result.success && result.stdout.isEmpty() && result.stderr.isEmpty() && !result.timedOut) {
             result.error?.let { return mapOf("success" to false, "error" to it) }
@@ -76,7 +77,7 @@ class ProotExecutor(private val launcher: ProotLauncher) {
 
     fun executeStreaming(
         command: String,
-        workingDir: String = "/root",
+        workingDir: String = "/workspace",
         extraEnv: Map<String, String> = emptyMap(),
         onStdout: (String) -> Unit,
         onStderr: (String) -> Unit,
@@ -105,6 +106,8 @@ class ProotExecutor(private val launcher: ProotLauncher) {
         return normalized == "/" ||
             normalized == "/root" ||
             normalized.startsWith("/root/") ||
+            normalized == "/workspace" ||
+            normalized.startsWith("/workspace/") ||
             normalized.startsWith("/tmp/") ||
             normalized == "/tmp"
     }

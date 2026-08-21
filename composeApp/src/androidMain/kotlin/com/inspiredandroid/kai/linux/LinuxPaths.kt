@@ -2,6 +2,10 @@ package com.inspiredandroid.kai.linux
 
 import android.content.Context
 import java.io.File
+import java.io.FileOutputStream
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 /** Directory under `filesDir` holding the chat sandbox's Linux. */
 const val SANDBOX_DIR_NAME = "linux-sandbox"
@@ -144,7 +148,28 @@ class LinuxPaths(
     fun writeMarker(marker: InstallMarker) {
         root.mkdirs()
         val home = if (marker.homeOnRootfs) HOME_ROOTFS else HOME_EXTERNAL
-        markerFile.writeText("$KEY_DISTRO=${marker.distro.id}\n$KEY_HOME=$home\n")
+        val content = "$KEY_DISTRO=${marker.distro.id}\n$KEY_HOME=$home\n"
+        val temporary = File.createTempFile("$MARKER_FILE.", ".tmp", root)
+        try {
+            FileOutputStream(temporary).use { output ->
+                output.write(content.toByteArray(Charsets.UTF_8))
+                output.fd.sync()
+            }
+            try {
+                Files.move(
+                    temporary.toPath(),
+                    markerFile.toPath(),
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING,
+                )
+            } catch (_: AtomicMoveNotSupportedException) {
+                // Same-directory rename remains atomic on Android filesystems that
+                // do not expose ATOMIC_MOVE through their java.nio provider.
+                Files.move(temporary.toPath(), markerFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
+        } finally {
+            temporary.delete()
+        }
     }
 
     private fun parseMarker(): InstallMarker? {

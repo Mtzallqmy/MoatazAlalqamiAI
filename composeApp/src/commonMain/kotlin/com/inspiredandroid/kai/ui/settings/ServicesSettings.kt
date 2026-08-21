@@ -69,6 +69,9 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.inspiredandroid.kai.data.Service
+import com.inspiredandroid.kai.data.DiagnosticCheck
+import com.inspiredandroid.kai.data.DiagnosticStatus
+import com.inspiredandroid.kai.data.ProviderDiagnosticReport
 import com.inspiredandroid.kai.formatFileSize
 import com.inspiredandroid.kai.inference.DevicePerformance
 import com.inspiredandroid.kai.inference.DownloadError
@@ -93,6 +96,15 @@ import kai.composeapp.generated.resources.ic_arrow_drop_down
 import kai.composeapp.generated.resources.ic_refresh
 import kai.composeapp.generated.resources.litert_cancel
 import kai.composeapp.generated.resources.settings_fetch_models
+import kai.composeapp.generated.resources.settings_api_diagnostics
+import kai.composeapp.generated.resources.settings_api_diagnostics_agents_ready
+import kai.composeapp.generated.resources.settings_api_diagnostics_chat_only
+import kai.composeapp.generated.resources.settings_api_diagnostics_unusable
+import kai.composeapp.generated.resources.settings_api_diagnostics_label_chat
+import kai.composeapp.generated.resources.settings_api_diagnostics_label_connection
+import kai.composeapp.generated.resources.settings_api_diagnostics_label_models
+import kai.composeapp.generated.resources.settings_api_diagnostics_label_tools
+import kai.composeapp.generated.resources.settings_api_diagnostics_run
 import kai.composeapp.generated.resources.settings_models_discovered
 import kai.composeapp.generated.resources.litert_context_size
 import kai.composeapp.generated.resources.litert_download
@@ -339,6 +351,7 @@ internal fun ServicesContent(uiState: SettingsUiState, actions: SettingsActions)
                     onChangeBaseUrl = { baseUrl -> actions.onChangeBaseUrl(entry.instanceId, baseUrl) },
                     onSelectModel = { modelId -> actions.onSelectModel(entry.instanceId, modelId) },
                     onRefreshModels = { instanceId -> actions.onRefreshModels(instanceId) },
+                    onDiagnoseProvider = { actions.onDiagnoseProvider(entry.instanceId) },
                     onToggleUseCustomModel = { use -> actions.onToggleUseCustomModel(entry.instanceId, use) },
                     onChangeCustomModelId = { id -> actions.onChangeCustomModelId(entry.instanceId, id) },
                     onRemove = { actions.onRemoveService(entry.instanceId) },
@@ -469,6 +482,7 @@ private fun ConfiguredServiceCardContent(
     onChangeBaseUrl: (String) -> Unit,
     onSelectModel: (String) -> Unit,
     onRefreshModels: (String) -> Unit = {},
+    onDiagnoseProvider: () -> Unit = {},
     onToggleUseCustomModel: (Boolean) -> Unit = {},
     onChangeCustomModelId: (String) -> Unit = {},
     onRemove: () -> Unit,
@@ -634,6 +648,14 @@ private fun ConfiguredServiceCardContent(
 
                 Spacer(Modifier.height(12.dp))
 
+                ProviderDiagnosticsPanel(
+                    report = entry.diagnostic,
+                    running = entry.isDiagnosing,
+                    onRun = onDiagnoseProvider,
+                )
+
+                Spacer(Modifier.height(12.dp))
+
                 // Remove action
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -653,6 +675,84 @@ private fun ConfiguredServiceCardContent(
             }
         }
     }
+}
+
+@Composable
+private fun ProviderDiagnosticsPanel(
+    report: ProviderDiagnosticReport?,
+    running: Boolean,
+    onRun: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().background(
+            MaterialTheme.colorScheme.surfaceContainerHighest,
+            RoundedCornerShape(12.dp),
+        ).padding(12.dp),
+    ) {
+        Text(stringResource(Res.string.settings_api_diagnostics), style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(6.dp))
+        OutlinedButton(onClick = onRun, enabled = !running, modifier = Modifier.handCursor()) {
+            if (running) {
+                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(stringResource(Res.string.settings_api_diagnostics_run))
+        }
+        if (report != null) {
+            Spacer(Modifier.height(8.dp))
+            val summary = providerDiagnosticSummary(report)
+            Text(
+                text = when (summary) {
+                    ProviderDiagnosticSummary.AgentReady -> stringResource(Res.string.settings_api_diagnostics_agents_ready)
+                    ProviderDiagnosticSummary.ChatReady -> stringResource(Res.string.settings_api_diagnostics_chat_only)
+                    ProviderDiagnosticSummary.Unusable -> stringResource(Res.string.settings_api_diagnostics_unusable)
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = when (summary) {
+                    ProviderDiagnosticSummary.AgentReady -> MaterialTheme.colorScheme.primary
+                    ProviderDiagnosticSummary.ChatReady -> MaterialTheme.colorScheme.tertiary
+                    ProviderDiagnosticSummary.Unusable -> MaterialTheme.colorScheme.error
+                },
+            )
+            DiagnosticRow(stringResource(Res.string.settings_api_diagnostics_label_connection), report.connection)
+            DiagnosticRow(stringResource(Res.string.settings_api_diagnostics_label_models), report.modelDiscovery)
+            DiagnosticRow(stringResource(Res.string.settings_api_diagnostics_label_chat), report.chatCompletion)
+            DiagnosticRow(stringResource(Res.string.settings_api_diagnostics_label_tools), report.toolCalling)
+            Text(
+                text = "${report.providerName} · ${report.modelId} · ${report.latencyMs} ms",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+internal enum class ProviderDiagnosticSummary { Unusable, ChatReady, AgentReady }
+
+internal fun providerDiagnosticSummary(report: ProviderDiagnosticReport): ProviderDiagnosticSummary = when {
+    report.isUsableForAgents -> ProviderDiagnosticSummary.AgentReady
+    report.isUsableForChat -> ProviderDiagnosticSummary.ChatReady
+    else -> ProviderDiagnosticSummary.Unusable
+}
+
+@Composable
+private fun DiagnosticRow(label: String, check: DiagnosticCheck) {
+    val symbol = when (check.status) {
+        DiagnosticStatus.Passed -> "✓"
+        DiagnosticStatus.Failed -> "✕"
+        DiagnosticStatus.Unsupported -> "—"
+        DiagnosticStatus.Skipped -> "○"
+    }
+    val color = when (check.status) {
+        DiagnosticStatus.Passed -> MaterialTheme.colorScheme.primary
+        DiagnosticStatus.Failed -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Text(
+        text = "$symbol $label: ${check.detail}",
+        style = MaterialTheme.typography.bodySmall,
+        color = color,
+    )
 }
 
 @Composable
