@@ -521,14 +521,14 @@ CI run and the listed runtime/device probes can promote a layer to verified:
 | 4. Approval Engine | Done + audit | `agents/ApprovalEngine.kt` + `ApprovalAuditLog.kt` |
 | 5. SandboxBackend abstraction | Done | `sandbox/backend/` — config, capabilities, models, error types |
 | 6. LocalProotSandboxBackend | Done | `sandbox/backend/LocalProotSandboxBackend.kt` — wraps PRoot shell/executor |
-| 7. RemoteSandboxBackend | Experimental client only | REST client exists; WebSocket stdin/streaming and a hardened server are not yet verified |
-| 8. Sandbox Provider | Done | `sandbox/remote/SandboxProvider.kt` — Incus-ready VM lifecycle |
-| 9. Gateway protocol | Done | `docs/SANDBOX_GATEWAY_PROTOCOL.md` |
+| 7. RemoteSandboxBackend | Hardened experimental client; CI pending | HTTPS, typed errors, binary-safe files and honest non-streaming capability |
+| 8. Sandbox Provider | SPI only; Incus not implemented | Tenant-scoped provider contract and fail-closed `NotConfigured` default |
+| 9. Gateway protocol | Experimental Ktor service; CI pending | JWT/tenant REST+WebSocket implementation in `sandbox-gateway`; no deployed backend claim |
 | 10. Debian 13 production default | Done | `linux/LinuxDistro.kt` Debian default + verified arm64 rootfs asset |
 | 11. Chat-integrated terminal | Implemented; device probe pending | Shared conversation session with real command input/cancel/transcript |
 | 12. Secrets hardening | Done | `security/SecretStore.kt` — keystore-backed, no legacy keys |
 | 13. Redaction + cancellation safety | Done | `logging/` + CancellationException guards (10 sites) |
 | 14. OpenAI Compatible UI | Done | `settings/ServicesSettings.kt` — presets, model refresh, count |
-| 15. Tests | CI pending | Test declarations exist; the published CI result is authoritative |
+| 15. Tests | Phase 2 CI green; Phase 3 CI pending | Test declarations exist; the published CI result is authoritative |
 
 Current architecture supersedes the earlier Ubuntu-local experiment: the production on-device contract is Debian 13 Trixie arm64. Remote sandbox providers may continue using their own Ubuntu VM images.
