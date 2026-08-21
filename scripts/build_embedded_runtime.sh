@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-assets="$repo_root/androidApp/src/main/assets"
+assets="$repo_root/androidApp/src/full/assets"
 manifest="$assets/moataz-debian-rootfs-arm64.manifest.json"
 legacy_asset="$assets/moataz-debian-rootfs-arm64.tar.xz"
 work="$(mktemp -d)"

@@ -46,41 +46,54 @@ jobs:
       - name: Build & Test
         run: |
           python3 scripts/verify_rootfs.py \
-            androidApp/src/main/assets \
-            androidApp/src/main/assets/moataz-debian-rootfs-arm64.manifest.json
-          ./gradlew :composeApp:testAndroid --no-daemon
+            androidApp/src/full/assets \
+            androidApp/src/full/assets/moataz-debian-rootfs-arm64.manifest.json
+          ./gradlew :composeApp:testAndroid :sandbox-gateway:test --no-daemon
+          ./gradlew \
+            :androidApp:assembleFossFullDebug \
+            :androidApp:assembleFossFullRelease \
+            :androidApp:assembleFossLiteDebug \
+            :androidApp:assembleFossLiteRelease \
+            --no-daemon
+          # Backward-compatible entry points must continue resolving to Full.
           ./gradlew :androidApp:assembleFossDebug --no-daemon
           ./gradlew :androidApp:assembleFossRelease --no-daemon
-      - name: Verify arm64 APK contract
+      - name: Verify Full and Lite APK contracts
         run: |
           BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
           AAPT="$BUILD_TOOLS/aapt"
           APKSIGNER="$BUILD_TOOLS/apksigner"
           test -x "$AAPT"
           test -x "$APKSIGNER"
-          APK="$(find androidApp/build/outputs/apk/foss/release -name '*.apk' | head -1)"
-          test -n "$APK"
-          zipinfo -1 "$APK" | grep '^lib/arm64-v8a/libproot.so$'
-          zipinfo -1 "$APK" | grep '^lib/arm64-v8a/libproot-loader.so$'
-          zipinfo -1 "$APK" | grep '^lib/arm64-v8a/libtalloc.so$'
-          ! zipinfo -1 "$APK" | grep -E '^lib/(x86|x86_64|armeabi-v7a)/'
-          zipinfo -1 "$APK" | grep 'assets/moataz-debian-rootfs-arm64.tar.xz.part-'
-          zipinfo -1 "$APK" | grep 'assets/moataz-debian-rootfs-arm64.manifest.json$'
-          PACKAGE_INFO="$("$AAPT" dump badging "$APK" | grep '^package:')"
-          printf '%s\n' "$PACKAGE_INFO" | grep -E "^package: name='com\.inspiredandroid\.kai' "
-          printf '%s\n' "$PACKAGE_INFO" | grep -E "versionCode='[1-9][0-9]*'"
-          CERTS="$RUNNER_TEMP/release-certs.txt"
-          "$APKSIGNER" verify --verbose --print-certs "$APK" > "$CERTS"
-          cat "$CERTS"
-          # apksigner output differs by build-tools version: current releases
-          # prefix certificate lines with "V2 Signer", older ones with
-          # "Signer #1". Require a certificate DN without coupling CI to the
-          # cosmetic prefix.
-          grep -Eq '^(V[0-9]+ Signer|Signer #[0-9]+).*certificate DN:' "$CERTS"
-          grep -q 'CN=Moataz CI Release' "$CERTS"
-          ! grep -qi 'Android Debug' "$CERTS"
-      - name: Upload APK
+          FULL_APK="$(find androidApp/build/outputs/apk -type f -name '*.apk' | grep -E '/fossFull/release/|/foss/full/release/' | head -1)"
+          LITE_APK="$(find androidApp/build/outputs/apk -type f -name '*.apk' | grep -E '/fossLite/release/|/foss/lite/release/' | head -1)"
+          test -n "$FULL_APK"
+          test -n "$LITE_APK"
+          for APK in "$FULL_APK" "$LITE_APK"; do
+            zipinfo -1 "$APK" | grep '^lib/arm64-v8a/libproot.so$'
+            zipinfo -1 "$APK" | grep '^lib/arm64-v8a/libproot-loader.so$'
+            zipinfo -1 "$APK" | grep '^lib/arm64-v8a/libtalloc.so$'
+            ! zipinfo -1 "$APK" | grep -E '^lib/(x86|x86_64|armeabi-v7a)/'
+            PACKAGE_INFO="$("$AAPT" dump badging "$APK" | grep '^package:')"
+            printf '%s\n' "$PACKAGE_INFO" | grep -E "^package: name='com\.inspiredandroid\.kai' "
+            printf '%s\n' "$PACKAGE_INFO" | grep -E "versionCode='[1-9][0-9]*'"
+            CERTS="$RUNNER_TEMP/$(basename "$APK").certs.txt"
+            "$APKSIGNER" verify --verbose --print-certs "$APK" > "$CERTS"
+            cat "$CERTS"
+            grep -Eq '^(V[0-9]+ Signer|Signer #[0-9]+).*certificate DN:' "$CERTS"
+            grep -q 'CN=Moataz CI Release' "$CERTS"
+            ! grep -qi 'Android Debug' "$CERTS"
+          done
+          zipinfo -1 "$FULL_APK" | grep 'assets/moataz-debian-rootfs-arm64.tar.xz.part-'
+          zipinfo -1 "$FULL_APK" | grep 'assets/moataz-debian-rootfs-arm64.manifest.json$'
+          ! zipinfo -1 "$LITE_APK" | grep 'assets/moataz-debian-rootfs-arm64.tar.xz.part-'
+          ! zipinfo -1 "$LITE_APK" | grep 'assets/moataz-debian-rootfs-arm64.manifest.json$'
+      - name: Upload Full and Lite APKs
         uses: actions/upload-artifact@v4
         with:
-          name: app-foss-debug
-          path: androidApp/build/outputs/apk/foss/debug/*.apk
+          name: app-foss-full-lite-debug
+          path: |
+            androidApp/build/outputs/apk/fossFull/debug/*.apk
+            androidApp/build/outputs/apk/fossLite/debug/*.apk
+            androidApp/build/outputs/apk/foss/full/debug/*.apk
+            androidApp/build/outputs/apk/foss/lite/debug/*.apk
